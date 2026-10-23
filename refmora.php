@@ -20,6 +20,7 @@ define( 'REFM_FILE', __FILE__ );
 define( 'REFM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'REFM_URL', plugin_dir_url( __FILE__ ) );
 require_once REFM_PATH . 'includes/class-refm-store.php';
+require_once REFM_PATH . 'includes/class-refm-reports.php';
 require_once REFM_PATH . 'includes/class-refm-security.php';
 require_once REFM_PATH . 'includes/class-refm-ui.php';
 require_once REFM_PATH . 'includes/class-refm-settings.php';

@@ -2,6 +2,13 @@
 (function () {
     'use strict';
     const config = window.refmAdmin || {};
+    document.querySelectorAll('.refm-admin [data-refm-report-range]').forEach(function (select) {
+        select.addEventListener('change', function () {
+            if (select.form && select.form.requestSubmit) {
+                select.form.requestSubmit();
+            }
+        });
+    });
     const notices = Array.from(document.querySelectorAll('.refm-admin [data-refm-toast]'));
     if (notices.length) {
         const stack = document.createElement('div');

@@ -21,14 +21,16 @@ final class REFM_Store {
 			affiliate_id bigint(20) unsigned NOT NULL,
 			click_date date NOT NULL,
 			clicks bigint(20) unsigned NOT NULL DEFAULT 0,
-			PRIMARY KEY  (affiliate_id,click_date)
+			PRIMARY KEY  (affiliate_id,click_date),
+			KEY click_date (click_date)
 		) ENGINE=InnoDB $collate;" );
 		dbDelta( "CREATE TABLE $customers (
 			customer_id bigint(20) unsigned NOT NULL,
 			affiliate_id bigint(20) unsigned NOT NULL,
 			created_at datetime NOT NULL,
 			PRIMARY KEY  (customer_id),
-			KEY affiliate_created (affiliate_id,created_at)
+			KEY affiliate_created (affiliate_id,created_at),
+			KEY created_at (created_at)
 		) ENGINE=InnoDB $collate;" );
 		dbDelta( "CREATE TABLE $commissions (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -49,7 +51,8 @@ final class REFM_Store {
 			KEY affiliate_status (affiliate_id,status),
 			KEY customer_id (customer_id),
 			KEY customer_hash (customer_hash),
-			KEY payout_id (payout_id)
+			KEY payout_id (payout_id),
+			KEY currency_created (currency,created_at)
 		) ENGINE=InnoDB $collate;" );
 		dbDelta( "CREATE TABLE $payouts (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -63,7 +66,8 @@ final class REFM_Store {
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,
 			PRIMARY KEY  (id),
-			KEY affiliate_status (affiliate_id,status)
+			KEY affiliate_status (affiliate_id,status),
+			KEY currency_created (currency,created_at)
 		) ENGINE=InnoDB $collate;" );
 		update_option( 'refm_db_version', REFM_VERSION, false );
 	}

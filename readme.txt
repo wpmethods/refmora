@@ -27,6 +27,7 @@ Refmora runs a WooCommerce affiliate program using customer accounts and your st
 * Share & Earn icons, same-store link generator and top-selling product links.
 * Referral click/registration counters and customer contacts masked for affiliates.
 * Ten-item admin and affiliate history lists with pagination; admin search and status filters. Overview summaries show recent activity.
+* Free Overview date ranges: Daily (today), Weekly (last 7 days), Monthly (last 30 days), This Year, Last Year and Lifetime, using the site's time zone.
 * Editable plain-text notifications, appearance settings and scoped custom CSS.
 * JSON settings backup, restore and reset, plus offline Docs/index.html documentation.
 * WooCommerce order CRUD, HPOS and classic/Checkout Blocks attribution hooks.
@@ -40,6 +41,7 @@ The features below are NOT included in this WordPress.org download. They are imp
 * Explicit payment sending after withdrawal approval, provider status checks and payment reconciliation.
 * Exchange-rate conversion using FOX/WOOCS, CURCY or manually configured currency pairs.
 * CSV exports for affiliates, commissions, withdrawals, referred customers and daily referral clicks, with optional date ranges.
+* Earnings overview area chart with hourly or daily points, using the Free Overview date filter. Chart code and styles are included only in the separate Pro add-on.
 
 Free and Pro share the same affiliate accounts, settings and financial history. General settings, JSON settings backups and all other Free features remain available without a license. Free core updates use WordPress.org after directory publication; licensed Pro add-on updates use the separate WP Methods service.
 
@@ -71,7 +73,10 @@ The base currency saved under WooCommerce -> Settings -> General. Free does not 
 When the order is Completed, immediately by default or after the saved waiting period. Tax and shipping are excluded; product totals after discounts are used. Refunds adjust earnings; already paid refunds can reduce future balances.
 
 = What is premium? =
-The separately distributed Pro add-on implements automatic PayPal/Stripe payouts, currency conversion, and CSV exports. Existing accounts and records are shared. The Free package contains contextual information about these extensions, not license-locked premium implementations.
+The separately distributed Pro add-on implements automatic PayPal/Stripe payouts, currency conversion, CSV exports and earnings charts. Existing accounts and records are shared. The Free package contains contextual information about these extensions, not license-locked premium implementations.
+
+= How do Overview date ranges work? =
+Daily includes today, Weekly includes today and the preceding six days, and Monthly includes today and the preceding 29 days. This Year covers January 1 through today. Last Year covers January 1 through December 31 of the previous calendar year. Lifetime includes all stored history through today. Calendar boundaries use the WordPress site time zone. Commission summaries filter creation dates and reflect current status, balances and refunds; Awaiting payout filters request dates. Referral counters use click and customer registration dates. Latest affiliate and withdrawal lists always show the newest records overall. Pro charts show released commissions by creation date, after refund adjustments, excluding pending and rejected commissions. This Year and Last Year use monthly chart points; Lifetime combines consecutive months when needed to keep at most 30 points without losing older records. These are current ledger summaries, not historical balance snapshots.
 
 = Are updates available without a key? =
 Yes. Directory-hosted Free updates use the normal WordPress.org update mechanism after publication. Pro add-on updates are separate and never replace the Free package with externally downloaded code.
@@ -100,9 +105,8 @@ The merchant guide is bundled in the Docs folder of this plugin download. Open D
 
 Tables use the site's prefix: refm_commissions, refm_payouts, refm_clicks and refm_customers. Database transactions and named locks serialize balance mutations. Financial data is deliberately preserved on deactivation; back up before changing the site or removing records.
 
-Extension hooks include refm_effective_settings, refm_exchange_rate, refm_clean_exchange_rates, refm_exchange_settings, refm_export_data_request and refm_export_data_panel. Premium code lives in a separate plugin, not a hidden directory inside Free.
+Extension hooks include refm_effective_settings, refm_exchange_rate, refm_clean_exchange_rates, refm_exchange_settings, refm_export_data_request, refm_export_data_panel and refm_admin_overview_chart (validated range, currency). Premium code lives in a separate plugin, not a hidden directory inside Free.
 
 == Changelog ==
-
 = 1.0.0 =
 * Initial release.

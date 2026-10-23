@@ -93,17 +93,20 @@ final class REFM_Admin {
 		$tab = sanitize_key( ( isset( $_GET[ 'tab' ] ) && is_scalar( $_GET[ 'tab' ] ) ? wp_unslash( $_GET[ 'tab' ] ) : 'overview' ) );
 		if ( ! isset( $tabs[ $tab ] ) ) { $tab = 'overview'; }
 		$active = REFM_Settings::program_enabled();
+		$range = 'overview' === $tab ? REFM_Reports::requested_range() : array();
 		echo '<div class="wrap refm refm-admin"><a class="screen-reader-text" href="#refm-main">' . esc_html__( 'Skip to panel content', 'refmora' ) . '</a><header class="refm-admin-header"><div class="refm-brand"><span class="refm-brand-icon" aria-hidden="true"><img src="' . esc_url( REFM_URL . 'assets/img/icon.png' ) . '" alt="" width="44" height="44"></span><div><span class="refm-eyebrow">WP METHODS</span><h1>Refmora<span class="refm-version">' . esc_html( REFM_VERSION ) . '</span> <span class="refm-tier-badge">' . esc_html( class_exists( 'REFM_Pro_License', false ) ? __( 'Pro', 'refmora' ) : __( 'Free', 'refmora' ) ) . '</span></h1></div></div><div class="refm-header-actions"><span class="refm-program-state ' . ( $active ? 'is-active' : '' ) . '"><span aria-hidden="true"></span>' . esc_html( $active ? __( 'Program active', 'refmora' ) : __( 'Program paused', 'refmora' ) ) . '</span><a class="button refm-primary" href="' . esc_url( wc_get_account_endpoint_url( 'refmora' ) ) . '">' . esc_html__( 'Affiliate Area', 'refmora' ) . wp_kses( REFM_UI::icon( 'arrow' ), REFM_UI::allowed_html() ) . '</a></div></header><div class="refm-admin-layout"><aside class="refm-sidebar"><p class="refm-eyebrow">' . esc_html__( 'PROGRAM MANAGEMENT', 'refmora' ) . '</p><nav class="refm-tabs" aria-label="' . esc_attr__( 'Affiliate administration', 'refmora' ) . '">';
 		$pending_counts = self::pending_counts();
 		foreach ( $tabs as $key => $label ) { echo '<a class="' . ( $key === $tab ? 'is-active' : '' ) . '" href="' . esc_url( admin_url( 'admin.php?page=refmora&tab=' . $key ) ) . '"' . ( $key === $tab ? ' aria-current="page"' : '' ) . '>' . wp_kses( REFM_UI::icon( $key ), REFM_UI::allowed_html() ) . '<span>' . esc_html( $label ) . '</span>' . wp_kses_post( self::pending_badge( $pending_counts[ $key ] ?? 0 ) ) . '</a>'; }
-		echo '</nav><div class="refm-sidebar-note">' . wp_kses( REFM_UI::icon( 'shield' ), REFM_UI::allowed_html() ) . '<strong>' . esc_html__( 'Built for your store', 'refmora' ) . '</strong><p>' . esc_html__( 'Simple referrals. Clear earnings. Payouts under your control.', 'refmora' ) . '</p></div></aside><main class="refm-main" id="refm-main"><div class="refm-heading"><span class="refm-eyebrow">' . esc_html__( 'YOUR PARTNER PROGRAM', 'refmora' ) . '</span><h2>' . esc_html( $tabs[ $tab ] ) . '</h2><p>' . esc_html( $descriptions[ $tab ] ) . '</p></div>';
+		echo '</nav><div class="refm-sidebar-note">' . wp_kses( REFM_UI::icon( 'shield' ), REFM_UI::allowed_html() ) . '<strong>' . esc_html__( 'Built for your store', 'refmora' ) . '</strong><p>' . esc_html__( 'Simple referrals. Clear earnings. Payouts under your control.', 'refmora' ) . '</p></div></aside><main class="refm-main" id="refm-main"><div class="refm-heading' . ( 'overview' === $tab ? ' refm-overview-title' : '' ) . '"><span class="refm-eyebrow">' . esc_html__( 'YOUR PARTNER PROGRAM', 'refmora' ) . '</span><h2>' . esc_html( $tabs[ $tab ] ) . '</h2><p>' . esc_html( $descriptions[ $tab ] ) . '</p>';
+		if ( 'overview' === $tab ) { REFM_Reports::controls( $range ); }
+		echo '</div>';
 		REFM_License::activation_notice( true );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
 		if ( '1' === sanitize_text_field( ( isset( $_GET[ 'saved' ] ) && is_scalar( $_GET[ 'saved' ] ) ? wp_unslash( $_GET[ 'saved' ] ) : '' ) ) ) { REFM_UI::toast( __( 'Settings saved.', 'refmora' ) ); }
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
 		if ( isset( $_GET['refm_message'] ) && is_scalar( $_GET['refm_message'] ) ) { REFM_UI::toast( sanitize_text_field( wp_unslash( $_GET['refm_message'] ) ), '1' === sanitize_text_field( ( isset( $_GET[ 'refm_error' ] ) && is_scalar( $_GET[ 'refm_error' ] ) ? wp_unslash( $_GET[ 'refm_error' ] ) : '' ) ) ); }
 		if ( 'settings' === $tab ) { self::settings(); }
-		elseif ( 'overview' === $tab ) { self::overview(); }
+		elseif ( 'overview' === $tab ) { self::overview( $range ); }
 		elseif ( 'affiliates' === $tab ) { self::affiliates(); }
 		elseif ( 'sharing' === $tab ) { REFM_Sharing::render(); }
 		elseif ( 'emails' === $tab ) { REFM_Emails::render(); }
@@ -113,30 +116,22 @@ final class REFM_Admin {
 		else { self::records( $tab ); }
 		echo '<p class="refm-footer">Refmora Affiliate &middot; <a href="https://wpmethods.com" target="_blank" rel="noopener noreferrer">WP Methods</a></p></main></div></div>';
 	}
-	private static function overview() {
-		global $wpdb;
-		$commissions = REFM_Store::table( 'commissions' );
-		$payouts = REFM_Store::table( 'payouts' );
+	private static function overview( $range ) {
 		$currency = REFM_Settings::get( 'currency' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$pending = $wpdb->get_var( $wpdb->prepare( 'SELECT COALESCE(SUM(amount),0) FROM %i WHERE currency=%s AND status=\'pending\'', $commissions, $currency ) );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$available = $wpdb->get_var( $wpdb->prepare( 'SELECT COALESCE(SUM(amount-paid_amount),0) FROM %i WHERE currency=%s AND payout_id=0 AND status IN (\'available\',\'paid\',\'rejected\')', $commissions, $currency ) );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$requested = $wpdb->get_var( $wpdb->prepare( 'SELECT COALESCE(SUM(amount),0) FROM %i WHERE currency=%s AND status IN (\'pending\',\'approved\',\'processing\')', $payouts, $currency ) );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$paid = $wpdb->get_var( $wpdb->prepare( 'SELECT COALESCE(SUM(paid_amount),0) FROM %i WHERE currency=%s', $commissions, $currency ) );
+		$stats = REFM_Reports::summary( $range );
 		echo '<div class="refm-metrics">';
-		echo wp_kses( REFM_UI::metric( __( 'Pending commissions', 'refmora' ), REFM_Store::money( $pending, $currency ), 'clock' ), REFM_UI::allowed_html() );
-		echo wp_kses( REFM_UI::metric( __( 'Available earnings', 'refmora' ), REFM_Store::money( $available, $currency ), 'wallet' ), REFM_UI::allowed_html() );
-		echo wp_kses( REFM_UI::metric( __( 'Awaiting payout', 'refmora' ), REFM_Store::money( $requested, $currency ), 'send' ), REFM_UI::allowed_html() );
-		echo wp_kses( REFM_UI::metric( __( 'Completed payouts', 'refmora' ), REFM_Store::money( $paid, $currency ), 'award' ), REFM_UI::allowed_html() );
+		echo wp_kses( REFM_UI::metric( __( 'Pending commissions', 'refmora' ), REFM_Store::money( $stats['pending'], $currency ), 'clock' ), REFM_UI::allowed_html() );
+		echo wp_kses( REFM_UI::metric( __( 'Available earnings', 'refmora' ), REFM_Store::money( $stats['available'], $currency ), 'wallet' ), REFM_UI::allowed_html() );
+		echo wp_kses( REFM_UI::metric( __( 'Awaiting payout', 'refmora' ), REFM_Store::money( $stats['requested'], $currency ), 'send' ), REFM_UI::allowed_html() );
+		echo wp_kses( REFM_UI::metric( __( 'Completed payouts', 'refmora' ), REFM_Store::money( $stats['paid'], $currency ), 'award' ), REFM_UI::allowed_html() );
 		echo '</div>';
-		$stats = REFM_Store::referral_stats();
 		echo '<div class="refm-referral-metrics">';
 		echo wp_kses( REFM_UI::metric( __( 'Referral clicks', 'refmora' ), number_format_i18n( $stats['clicks'] ), 'click' ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'Registered customers', 'refmora' ), number_format_i18n( $stats['customers'] ), 'user' ), REFM_UI::allowed_html() );
-		echo '</div>'; self::overview_lists();
+		echo '</div><p class="refm-report-note">' . esc_html__( 'Commission summaries use creation dates and current balances, including refund adjustments. Awaiting payouts uses request dates. Latest lists below show the newest records overall.', 'refmora' ) . '</p>';
+		/** Separate add-ons can render an overview report using the same validated date range. */
+		do_action( 'refm_admin_overview_chart', $range, $currency );
+		self::overview_lists();
 		echo '<div class="refm-grid"><section class="refm-card"><h2>' . esc_html__( 'Program at a glance', 'refmora' ) . '</h2><dl class="refm-definition">';
 		$rate = 'percent' === REFM_Settings::get( 'commission_type' ) ? esc_html( REFM_Settings::get( 'commission_rate' ) ) . '%' : wp_kses_post( REFM_Store::money( REFM_Settings::get( 'commission_rate' ) ) ) . ' ' . esc_html__( 'per unit', 'refmora' );
 		$values = array( __( 'Program', 'refmora' ) => REFM_Settings::program_enabled() ? esc_html__( 'Active', 'refmora' ) : esc_html__( 'Paused', 'refmora' ), __( 'Default commission', 'refmora' ) => $rate, __( 'Cookie duration', 'refmora' ) => (int) REFM_Settings::get( 'cookie_days' ) . ' ' . esc_html__( 'days', 'refmora' ), __( 'Minimum withdrawal', 'refmora' ) => wp_kses_post( REFM_Store::money( REFM_Settings::get( 'minimum' ) ) ), __( 'Active payout methods', 'refmora' ) => count( REFM_Settings::methods() ) );
