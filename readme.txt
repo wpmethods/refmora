@@ -1,4 +1,4 @@
-=== Refmora ===
+=== Refmora - Affiliate Management for WooCommerce ===
 Contributors: wpmethods
 Tags: woocommerce, affiliate, commission, referral, payout
 Requires at least: 6.5
@@ -49,7 +49,7 @@ Premium implementation code is not included in this WordPress.org package. Free 
 
 1. Install and activate WooCommerce.
 2. Install Refmora through Plugins and activate it.
-3. Open WooCommerce -> Refmora -> Settings; no license is needed.
+3. Open WooCommerce -> Refmora Affiliate-> Settings; no license is needed.
 4. Configure enrollment, commissions, referral tracking and manual payout methods.
 5. Customers join at My Account -> Affiliate Area.
 6. Test a referral order using a separate buyer account and review Docs/index.html.
