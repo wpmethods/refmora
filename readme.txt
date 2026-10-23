@@ -6,6 +6,7 @@ Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
 Stable tag: 1.0.0
+Donate link: https://buymeacoffee.com/ajharrashed
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,12 +30,14 @@ Refmora runs a WooCommerce affiliate program using customer accounts and your st
 * Ten-item admin and affiliate history lists with pagination; admin search and status filters. Overview summaries show recent activity.
 * Free Overview date ranges: Daily (today), Weekly (last 7 days), Monthly (last 30 days), This Year, Last Year and Lifetime, using the site's time zone.
 * Editable plain-text notifications, appearance settings and scoped custom CSS.
-* JSON settings backup, restore and reset, plus offline Docs/index.html documentation.
+* JSON settings backup, restore and reset.
 * WooCommerce order CRUD, HPOS and classic/Checkout Blocks attribution hooks.
 
 = Optional Refmora Pro add-on (not included) =
 
 The features below are NOT included in this WordPress.org download. They are implemented by the separately distributed Refmora Pro add-on, which requires the Free plugin and an active Pro license. The Free plugin is useful on its own and all Free features work without activation.
+
+Learn more about the [Refmora Pro add-on](https://wpmethods.com/product/refmora-best-affiliate-plugin-for-woocommerce/).
 
 * PayPal Payouts API payments with Sandbox and Live environments.
 * Stripe Connect account onboarding and API payments with Test and Live environments.
@@ -47,6 +50,10 @@ Free and Pro share the same affiliate accounts, settings and financial history. 
 
 Premium implementation code is not included in this WordPress.org package. Free features do not expire or require a key.
 
+= Support development =
+
+If Refmora helps your store, you can support its development: [☕ Buy me a coffee](https://buymeacoffee.com/ajharrashed).
+
 == Installation ==
 
 1. Install and activate WooCommerce.
@@ -54,7 +61,7 @@ Premium implementation code is not included in this WordPress.org package. Free 
 3. Open WooCommerce -> Refmora Affiliate-> Settings; no license is needed.
 4. Configure enrollment, commissions, referral tracking and manual payout methods.
 5. Customers join at My Account -> Affiliate Area.
-6. Test a referral order using a separate buyer account and review Docs/index.html.
+6. Test a referral order using a separate buyer account.
 
 If the account URL returns 404, resave settings or WordPress permalinks and purge page caches.
 
@@ -99,7 +106,7 @@ Notifications use WordPress wp_mail and the site's configured mail service. No s
 
 == Documentation ==
 
-The merchant guide is bundled in the Docs folder of this plugin download. Open Docs/index.html for the searchable merchant and affiliate guide, mobile navigation and print view. Settings, tracking, commissions, manual payouts, caching, privacy and troubleshooting are covered. Pro-only chapters are marked as add-on features.
+Read the [online Refmora documentation](https://wpmethods.com/refmora-documentation) for the merchant and affiliate guide. Settings, tracking, commissions, manual payouts, caching, privacy and troubleshooting are covered. Pro-only chapters are marked as add-on features.
 
 == Developer notes ==
 
