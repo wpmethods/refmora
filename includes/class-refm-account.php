@@ -195,8 +195,9 @@ final class REFM_Account {
 			$url = $product->get_permalink(); $link = REFM_Sharing::link( $id, $url );
 			if ( is_wp_error( $link ) ) { continue; }
 			$shown++;
+			// Keep native lazy loading: theme fallbacks can become duplicate images when wp_kses_post() strips noscript.
 		/* translators: %s: product name. */
-			echo '<li><span class="refm-best-seller-rank" aria-hidden="true">' . esc_html( $shown ) . '</span><a class="refm-best-seller-product" href="' . esc_url( $url ) . '">' . wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy', 'alt' => '' ) ) ) . '<span>' . esc_html( $product->get_name() ) . '</span></a><button type="button" class="button refm-primary" data-refm-copy data-refm-url="' . esc_attr( $link ) . '" data-copied="' . esc_attr__( 'Copied!', 'refmora' ) . '" data-copy-failed="' . esc_attr__( 'Could not copy. Please try again.', 'refmora' ) . '" aria-label="' . esc_attr( sprintf( __( 'Copy affiliate link for %s', 'refmora' ), $product->get_name() ) ) . '">' . esc_html__( 'Copy link', 'refmora' ) . '</button></li>';
+			echo '<li><span class="refm-best-seller-rank" aria-hidden="true">' . esc_html( $shown ) . '</span><a class="refm-best-seller-product" href="' . esc_url( $url ) . '">' . wp_kses_post( $product->get_image( 'woocommerce_thumbnail', array( 'loading' => 'lazy', 'alt' => '', 'class' => 'attachment-woocommerce_thumbnail size-woocommerce_thumbnail skip-lazy' ) ) ) . '<span>' . esc_html( $product->get_name() ) . '</span></a><button type="button" class="button refm-primary" data-refm-copy data-refm-url="' . esc_attr( $link ) . '" data-copied="' . esc_attr__( 'Copied!', 'refmora' ) . '" data-copy-failed="' . esc_attr__( 'Could not copy. Please try again.', 'refmora' ) . '" aria-label="' . esc_attr( sprintf( __( 'Copy affiliate link for %s', 'refmora' ), $product->get_name() ) ) . '">' . esc_html__( 'Copy link', 'refmora' ) . '</button></li>';
 		}
 		echo '</ol>';
 		if ( ! $shown ) { echo '<p class="refm-muted">' . esc_html__( 'Top-selling products will appear here when eligible products have sales.', 'refmora' ) . '</p>'; }
