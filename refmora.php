@@ -19,6 +19,7 @@ define( 'REFM_VERSION', '1.1.1' );
 define( 'REFM_FILE', __FILE__ );
 define( 'REFM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'REFM_URL', plugin_dir_url( __FILE__ ) );
+require_once REFM_PATH . 'includes/class-refm-data.php';
 require_once REFM_PATH . 'includes/class-refm-store.php';
 require_once REFM_PATH . 'includes/class-refm-reports.php';
 require_once REFM_PATH . 'includes/class-refm-refer-links.php';
@@ -65,6 +66,7 @@ add_action( 'plugins_loaded', function () {
 		} );
 		return;
 	}
+	REFM_Data::init();
 	if ( get_option( 'refm_db_version' ) !== REFM_VERSION || get_option( 'refm_schema_version' ) !== REFM_Store::SCHEMA_VERSION ) {
 		REFM_Store::install();
 	}

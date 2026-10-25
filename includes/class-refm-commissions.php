@@ -127,6 +127,7 @@ final class REFM_Commissions {
 		$id = is_object( $order_or_id ) ? $order_or_id->get_id() : absint( $order_or_id );
 		$order = wc_get_order( $id );
 		if ( ! $order || $order instanceof WC_Order_Refund ) { return; }
+		if ( ! REFM_Data::order_is_current( $order ) ) { return; }
 		if ( self::incomplete_order( $order ) ) {
 			$table = REFM_Store::table( 'commissions' );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom financial tables/transaction locks require direct SQL and fresh state to preserve reservation and refund consistency.
@@ -157,6 +158,7 @@ final class REFM_Commissions {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom financial tables/transaction locks require direct SQL and fresh state to preserve reservation and refund consistency.
 			$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM %i WHERE order_id=%d', $table, $id ) );
 			if ( ! $order ) { return; }
+			if ( ! REFM_Data::order_is_current( $order ) ) { return; }
 			if ( self::incomplete_order( $order ) ) { self::discard_placeholder_row( $row ); return; }
 			if ( $only_missing && $row ) { return new WP_Error( 'exists', __( 'This order already has a commission record. Its financial history was left unchanged.', 'refmora' ) ); }
 			// Existing same-currency records keep their original calculation semantics.

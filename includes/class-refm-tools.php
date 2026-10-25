@@ -6,7 +6,7 @@ final class REFM_Tools {
 	public static function init() { add_action( 'admin_post_refm_tools', array( __CLASS__, 'submit' ) ); }
 	public static function guard( $operation ) {
 		REFM_Security::admin_request( 'refm_tools' );
-		if ( 'csv' !== $operation && ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'Only administrators can manage settings backups.', 'refmora' ), '', array( 'response' => 403 ) ); }
+		if ( 'csv' !== $operation && ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'Only administrators can manage these tools.', 'refmora' ), '', array( 'response' => 403 ) ); }
 
 	}
 	public static function backup() {
@@ -38,11 +38,14 @@ final class REFM_Tools {
 		if ( ! isset( $_POST['_wpnonce'] ) || ! is_string( $_POST['_wpnonce'] ) ) { wp_die( esc_html__( 'Your session expired. Refresh and try again.', 'refmora' ), '', array( 'response' => 403 ) ); }
 		check_admin_referer( 'refm_tools' );
 		$operation = isset( $_POST['operation'] ) && is_string( $_POST['operation'] ) ? sanitize_key( wp_unslash( $_POST['operation'] ) ) : '';
-		if ( ! in_array( $operation, array( 'backup', 'restore', 'reset', 'csv' ), true ) ) { wp_die( esc_html__( 'Unknown tools action.', 'refmora' ), '', array( 'response' => 400 ) ); }
-		if ( 'csv' !== $operation && ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'Only administrators can manage settings backups.', 'refmora' ), '', array( 'response' => 403 ) ); }
+		if ( ! in_array( $operation, array( 'backup', 'restore', 'reset', 'clear', 'csv' ), true ) ) { wp_die( esc_html__( 'Unknown tools action.', 'refmora' ), '', array( 'response' => 400 ) ); }
+		if ( 'csv' !== $operation && ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'Only administrators can manage these tools.', 'refmora' ), '', array( 'response' => 403 ) ); }
 		if ( 'backup' === $operation ) { self::download_headers( 'settings', 'json', 'application/json' ); echo wp_json_encode( self::backup(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE ); exit; }
 		if ( 'csv' === $operation ) { do_action( 'refm_export_data_request' ); wp_die( esc_html__( 'CSV export is available in the separate Refmora Pro add-on.', 'refmora' ), '', array( 'response' => 403 ) ); }
 		if ( 'restore' === $operation ) { $result = self::upload(); if ( ! is_wp_error( $result ) ) { self::apply( $result ); $result = __( 'Settings restored successfully.', 'refmora' ); } }
+		elseif ( 'clear' === $operation ) {
+			$result = REFM_Data::clear( isset( $_POST['confirmation'] ) && is_string( $_POST['confirmation'] ) ? sanitize_text_field( wp_unslash( $_POST['confirmation'] ) ) : '' );
+		}
 		elseif ( 'reset' === $operation ) {
 			if ( 'RESET' !== ( isset( $_POST['confirmation'] ) && is_string( $_POST['confirmation'] ) ? sanitize_text_field( wp_unslash( $_POST['confirmation'] ) ) : '' ) ) { $result = new WP_Error( 'confirm', __( 'Type RESET to confirm resetting plugin settings.', 'refmora' ) ); }
 			else { self::apply( self::defaults() ); $result = __( 'Plugin settings reset to defaults. Your license and financial records were preserved.', 'refmora' ); }
@@ -74,6 +77,9 @@ final class REFM_Tools {
 			echo '<section class="refm-card"><h2>' . esc_html__( 'Restore settings', 'refmora' ) . '</h2><p class="refm-muted">' . esc_html__( 'Upload a settings backup to replace those four settings groups. Maximum size: 1 MB.', 'refmora' ) . '</p>'; self::form( 'restore', true ); echo '<div class="refm-tools-action-row"><div class="refm-field"><label for="refm-backup-file">' . esc_html__( 'Settings backup (.json)', 'refmora' ) . '</label><input type="file" id="refm-backup-file" name="backup" accept=".json,application/json" required' . esc_attr( $disabled ) . '></div><button class="button refm-primary"' . esc_attr( $disabled ) . '>' . esc_html__( 'Restore settings', 'refmora' ) . '</button></div></form></section></div>';
 			echo '<section class="refm-card"><h2>' . esc_html__( 'Reset plugin settings', 'refmora' ) . '</h2><p class="refm-muted">' . esc_html__( 'Restore program, sharing, email and appearance defaults. Your license, affiliate accounts, per-product commission rules and financial history are kept. Download a backup first.', 'refmora' ) . '</p>'; self::form( 'reset' ); echo '<div class="refm-tools-action-row"><div class="refm-field"><label for="refm-reset-confirmation">' . esc_html__( 'Type RESET to confirm', 'refmora' ) . '</label><input type="text" id="refm-reset-confirmation" name="confirmation" placeholder="RESET" pattern="RESET" maxlength="5" required autocomplete="off"' . esc_attr( $disabled ) . '></div><button class="button refm-primary"' . esc_attr( $disabled ) . '>' . esc_html__( 'Reset settings', 'refmora' ) . '</button></div></form>';
 			if ( $disabled ) { echo '<p class="refm-muted">' . esc_html__( 'Restore and reset are available in Free.', 'refmora' ) . '</p>'; } echo '</section>';
+			echo '<section class="refm-card refm-clear-data"><h2>' . wp_kses( REFM_UI::icon( 'trash' ), REFM_UI::allowed_html() ) . esc_html__( 'Clear data', 'refmora' ) . '</h2><p class="refm-muted">' . esc_html__( 'Permanently delete all Refmora affiliate enrollments, referral links, clicks, referred-customer records, commissions and withdrawal history. WooCommerce customer accounts and orders, plugin settings, product rules and license remain unchanged. This cannot be undone.', 'refmora' ) . '</p>';
+			self::form( 'clear' );
+			echo '<div class="refm-tools-action-row"><div class="refm-field"><label for="refm-clear-confirmation">' . esc_html__( 'Type CLEAR DATA to confirm', 'refmora' ) . '</label><input type="text" id="refm-clear-confirmation" name="confirmation" placeholder="CLEAR DATA" pattern="CLEAR DATA" maxlength="10" required autocomplete="off"></div><button class="button refm-primary refm-danger">' . wp_kses( REFM_UI::icon( 'trash' ), REFM_UI::allowed_html() ) . esc_html__( 'Clear data', 'refmora' ) . '</button></div></form></section>';
 		}
 		if ( has_action( 'refm_export_data_panel' ) ) { do_action( 'refm_export_data_panel' ); } else { REFM_License::premium_card( __( 'Export data', 'refmora' ), __( 'CSV exports of affiliates, commissions, withdrawals, customers and referral clicks are provided by the separate Pro add-on.', 'refmora' ) ); }
 	}

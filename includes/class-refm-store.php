@@ -96,6 +96,8 @@ final class REFM_Store {
 	/** Serialize all balance mutations for one affiliate, including order refunds. */
 	public static function locked( $affiliate_id, $callback, $additional_locks = array() ) {
 		global $wpdb;
+		$state = REFM_Data::state();
+		if ( ! is_array( $state ) || ! empty( $state['clearing'] ) ) { return new WP_Error( 'busy', __( 'Refmora data is being cleared. Please try again shortly.', 'refmora' ) ); }
 		$keys = array( 'refm_' . md5( $wpdb->prefix . ':' . absint( $affiliate_id ) ) );
 		foreach ( $additional_locks as $identity ) { $keys[] = 'refm_' . md5( $wpdb->prefix . ':' . $identity ); }
 		$keys = array_unique( $keys ); sort( $keys ); $held = array(); $committed = false;
@@ -110,6 +112,9 @@ final class REFM_Store {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom financial tables/transaction locks require direct SQL and fresh state to preserve reservation and refund consistency.
 			self::must( $wpdb->query( 'START TRANSACTION' ) );
 			$result = call_user_func( $callback );
+			if ( ! is_wp_error( $result ) && (int) $state['generation'] !== REFM_Data::generation_at_commit() ) {
+				$result = new WP_Error( 'cleared', __( 'Refmora data was cleared during this request. Please refresh and try again.', 'refmora' ) );
+			}
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom financial tables/transaction locks require direct SQL and fresh state to preserve reservation and refund consistency.
 			if ( is_wp_error( $result ) ) { self::must( $wpdb->query( 'ROLLBACK' ) ); } else { self::must( $wpdb->query( 'COMMIT' ) ); }
 			$committed = ! is_wp_error( $result );
@@ -157,7 +162,7 @@ final class REFM_Store {
 	}
 
 	public static function status( $status ) {
-		$labels = array( 'processing' => __( 'Processing', 'refmora' ), 'tested' => __( 'Sandbox successful', 'refmora' ), 'failed' => __( 'Failed', 'refmora' ), 'pending' => __( 'Pending', 'refmora' ), 'available' => __( 'Available', 'refmora' ), 'reserved' => __( 'In withdrawal', 'refmora' ), 'paid' => __( 'Paid', 'refmora' ), 'approved' => __( 'Approved', 'refmora' ), 'completed' => __( 'Completed', 'refmora' ), 'rejected' => __( 'Rejected', 'refmora' ), 'paused' => __( 'Paused', 'refmora' ) );
+		$labels = array( 'blocked' => __( 'Blocked', 'refmora' ), 'processing' => __( 'Processing', 'refmora' ), 'tested' => __( 'Sandbox successful', 'refmora' ), 'failed' => __( 'Failed', 'refmora' ), 'pending' => __( 'Pending', 'refmora' ), 'available' => __( 'Available', 'refmora' ), 'reserved' => __( 'In withdrawal', 'refmora' ), 'paid' => __( 'Paid', 'refmora' ), 'approved' => __( 'Approved', 'refmora' ), 'completed' => __( 'Completed', 'refmora' ), 'rejected' => __( 'Rejected', 'refmora' ), 'paused' => __( 'Paused', 'refmora' ) );
 		return '<span class="refm-badge refm-' . esc_attr( $status ) . '">' . esc_html( $labels[ $status ] ?? $status ) . '</span>';
 	}
 }

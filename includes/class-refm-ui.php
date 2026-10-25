@@ -32,6 +32,7 @@ final class REFM_UI {
 	}
 	public static function icon( $name ) {
 		$paths = array(
+			'trash' => 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
 			'image' => 'M3 3h18v18H3z M3 16l6-6 5 5 3-3 4 4 M16 7h.01',
 			'note' => 'M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5',
 			'close' => 'M6 6l12 12 M18 6L6 18',

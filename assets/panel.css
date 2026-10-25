@@ -251,3 +251,11 @@ body.admin-bar .refm-admin .refm-toast-stack{top:48px}
 .refm .refm-withdraw-progress-heading>strong[data-level=low]{color:#dc4444}
 .refm .refm-withdraw-progress-heading>strong[data-level=medium]{color:#a66b00}
 .refm .refm-withdraw-progress-heading>strong[data-level=complete]{color:#159447}
+/* Compact affiliate approvals and a distinct destructive Block action. */
+.refm-admin .refm-affiliate-actions{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;min-width:84px}
+.refm-admin .refm-affiliate-actions .refm-primary.refm-icon-action{box-sizing:border-box;flex:0 0 38px;width:38px;min-width:38px;height:38px;min-height:38px;padding:0;gap:0}
+.refm-admin .refm-affiliate-actions .refm-icon-action .refm-icon{width:18px;height:18px}
+.refm-admin .refm-affiliate-actions .refm-primary[value=block]{background:#dc2626!important;color:#fff!important;border:1px solid #dc2626}
+.refm-admin .refm-affiliate-actions .refm-primary[value=block]:hover{background:#b91c1c!important;border-color:#b91c1c;filter:none}
+.refm-admin .refm-affiliate-actions .refm-primary[value=block]:focus-visible{outline-color:#dc2626}
+.refm .refm-badge.refm-blocked{background:#fcecec;color:#b42318}

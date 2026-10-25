@@ -24,7 +24,7 @@ final class REFM_Refer_Links {
 		if ( strlen( $raw ) > 3500 || ! preg_match( '/^([A-Za-z0-9_%~-]+)\.([a-f0-9]{64})$/', $raw, $parts ) ) {
 			return array();
 		}
-		if ( ! hash_equals( hash_hmac( 'sha256', 'refm_link_clicks|' . $parts[1], wp_salt( 'auth' ) ), $parts[2] ) ) {
+		if ( ! hash_equals( hash_hmac( 'sha256', 'refm_link_clicks|' . $parts[1], REFM_Data::cookie_key() ), $parts[2] ) ) {
 			return array();
 		}
 		$items = json_decode( rawurldecode( $parts[1] ), true, 3 );
@@ -229,7 +229,7 @@ final class REFM_Refer_Links {
 		$recent[ $key ] = $expires;
 		$recent         = array_slice( $recent, -self::MAX_LINKS, null, true );
 		$packet         = rawurlencode( wp_json_encode( $recent ) );
-		$value          = $packet . '.' . hash_hmac( 'sha256', 'refm_link_clicks|' . $packet, wp_salt( 'auth' ) );
+		$value          = $packet . '.' . hash_hmac( 'sha256', 'refm_link_clicks|' . $packet, REFM_Data::cookie_key() );
 		setcookie(
 			self::COOKIE,
 			$value,

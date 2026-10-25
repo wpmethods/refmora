@@ -92,7 +92,7 @@ final class REFM_Admin {
 		if ( current_user_can( 'manage_options' ) ) { $tabs['license'] = class_exists( 'REFM_Pro_License', false ) ? __( 'License', 'refmora' ) : __( 'Premium', 'refmora' ); }
 		$descriptions['refer_links'] = __( 'Browse referral URLs and their tracked clicks.', 'refmora' );
 		$descriptions['customers'] = __( 'Customers registered through affiliate referral links.', 'refmora' );
-		$descriptions['tools'] = __( 'Back up and restore settings, reset defaults and export your program records.', 'refmora' );
+		$descriptions['tools'] = __( 'Back up and restore settings, reset defaults, clear Refmora data and export your program records.', 'refmora' );
 		$descriptions['license'] = __( 'Manage your license and receive updates from WP Methods.', 'refmora' );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
 		$tab = sanitize_key( ( isset( $_GET[ 'tab' ] ) && is_scalar( $_GET[ 'tab' ] ) ? wp_unslash( $_GET[ 'tab' ] ) : 'overview' ) );
@@ -168,7 +168,7 @@ final class REFM_Admin {
 		// phpcs:ignore WordPress.DB.SlowDBQuery -- Required enrolled-affiliate predicate; only five users are fetched, no total count, with native WordPress query caching.
 		$users = get_users( array( 'count_total' => false, 'cache_results' => true, 'meta_key' => '_refm_enrolled', 'meta_value' => 'yes', 'number' => 5, 'orderby' => 'ID', 'order' => 'DESC' ) );
 		echo '<section class="refm-card" id="refm-overview-affiliates"><div class="refm-overview-heading"><h2>' . esc_html__( 'Latest affiliates', 'refmora' ) . '</h2><a class="refm-overview-link" href="' . esc_url( admin_url( 'admin.php?page=refmora&tab=affiliates' ) ) . '">' . esc_html__( 'See more affiliates', 'refmora' ) . '</a></div><div class="refm-table-scroll"><table><thead><tr><th>' . esc_html__( 'Affiliate', 'refmora' ) . '</th><th>' . esc_html__( 'Account', 'refmora' ) . '</th></tr></thead><tbody>';
-		foreach ( $users as $user ) { echo '<tr><td>' . wp_kses_post( self::identity( $user->ID ) ) . '</td><td>' . ( 'yes' === get_user_meta( $user->ID, '_refm_blocked', true ) ? esc_html__( 'Blocked', 'refmora' ) : wp_kses_post( REFM_Store::status( REFM_Affiliates::status( $user->ID ) ) ) ) . '</td></tr>'; }
+		foreach ( $users as $user ) { echo '<tr><td>' . wp_kses_post( self::identity( $user->ID ) ) . '</td><td>' . ( 'yes' === get_user_meta( $user->ID, '_refm_blocked', true ) ? wp_kses_post( REFM_Store::status( 'blocked' ) ) : wp_kses_post( REFM_Store::status( REFM_Affiliates::status( $user->ID ) ) ) ) . '</td></tr>'; }
 		if ( ! $users ) { echo '<tr><td colspan="2" class="refm-empty">' . esc_html__( 'No affiliates yet.', 'refmora' ) . '</td></tr>'; }
 		echo '</tbody></table></div></section></div>';
 	}
@@ -317,13 +317,14 @@ final class REFM_Admin {
 			$blocked = 'yes' === get_user_meta( $user->ID, '_refm_blocked', true );
 			$stats = REFM_Store::referral_stats( $user->ID );
 			$approval = REFM_Affiliates::status( $user->ID );
-			echo '<tr><td>' . esc_html( number_format_i18n( ++$serial ) ) . '</td><td>' . wp_kses_post( self::identity( $user->ID ) ) . '</td><td>' . wp_kses_post( REFM_Store::money( REFM_Store::balance( $user->ID, REFM_Settings::get( 'currency' ) ) ) ) . '</td><td>' . wp_kses_post( REFM_Store::money( $earnings[ $user->ID ]->earned ?? 0, $currency ) ) . '</td><td>' . esc_html( number_format_i18n( $stats['clicks'] ) ) . '</td><td>' . esc_html( number_format_i18n( $stats['customers'] ) ) . '</td><td>' . ( $blocked ? esc_html__( 'Blocked', 'refmora' ) : wp_kses_post( REFM_Store::status( $approval ) ) ) . '</td><td>';
+			echo '<tr><td>' . esc_html( number_format_i18n( ++$serial ) ) . '</td><td>' . wp_kses_post( self::identity( $user->ID ) ) . '</td><td>' . wp_kses_post( REFM_Store::money( REFM_Store::balance( $user->ID, REFM_Settings::get( 'currency' ) ) ) ) . '</td><td>' . wp_kses_post( REFM_Store::money( $earnings[ $user->ID ]->earned ?? 0, $currency ) ) . '</td><td>' . esc_html( number_format_i18n( $stats['clicks'] ) ) . '</td><td>' . esc_html( number_format_i18n( $stats['customers'] ) ) . '</td><td>' . ( $blocked ? wp_kses_post( REFM_Store::status( 'blocked' ) ) : wp_kses_post( REFM_Store::status( $approval ) ) ) . '</td><td>';
 			self::application_details( $user->ID );
 			$actions = 'pending' === $approval ? array( 'approved' => __( 'Approve', 'refmora' ), 'rejected' => __( 'Reject', 'refmora' ) ) : ( 'rejected' === $approval ? array( 'approved' => __( 'Approve', 'refmora' ) ) : array( $blocked ? 'unblock' : 'block' => $blocked ? __( 'Unblock', 'refmora' ) : __( 'Block', 'refmora' ) ) );
-			echo '<form class="refm-actions" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_affiliate"><input type="hidden" name="affiliate_id" value="' . absint( $user->ID ) . '">'; wp_nonce_field( 'refm_affiliate_' . $user->ID );
+			echo '<form class="refm-actions refm-affiliate-actions" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_affiliate"><input type="hidden" name="affiliate_id" value="' . absint( $user->ID ) . '">'; wp_nonce_field( 'refm_affiliate_' . $user->ID );
 			foreach ( $actions as $operation => $label ) {
 				$icon = 'approved' === $operation ? 'check' : ( 'rejected' === $operation ? 'close' : ( 'block' === $operation ? 'lock' : 'shield' ) );
-				echo '<button type="submit" class="button refm-primary' . ( 'rejected' === $operation ? ' refm-danger' : '' ) . '" name="operation" value="' . esc_attr( $operation ) . '">' . wp_kses( REFM_UI::icon( $icon ), REFM_UI::allowed_html() ) . esc_html( $label ) . '</button>';
+				$icon_only = in_array( $operation, array( 'approved', 'rejected' ), true );
+				echo '<button type="submit" class="button refm-primary' . ( 'rejected' === $operation ? ' refm-danger' : '' ) . ( $icon_only ? ' refm-icon-action' : '' ) . '" name="operation" value="' . esc_attr( $operation ) . '" aria-label="' . esc_attr( $label ) . '" title="' . esc_attr( $label ) . '">' . wp_kses( REFM_UI::icon( $icon ), REFM_UI::allowed_html() ) . ( $icon_only ? '' : esc_html( $label ) ) . '</button>';
 			}
 			echo '</form></td></tr>';
 		}

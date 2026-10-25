@@ -71,6 +71,7 @@ The Overview also shows recent activity. The earnings and referrals history char
 * Edit plain-text email notifications.
 * Adjust the appearance and add custom CSS scoped to the plugin.
 * Back up, restore, or reset settings using JSON files.
+* Clear Refmora affiliate enrollments and program history with administrator access and typed confirmation. WooCommerce customers and orders, plugin settings, product rules, and license remain unchanged.
 * Use WooCommerce order CRUD, High-Performance Order Storage (HPOS), and attribution hooks for classic checkout and Checkout Blocks.
 
 = Optional Refmora Pro add-on =
@@ -229,6 +230,8 @@ Financial records, license state, payment-provider credentials, and product-spec
 
 Only administrators can manage settings backups.
 
+The separate Clear data tool requires typing CLEAR DATA. It permanently removes Refmora affiliate enrollments, referral links and counters, referred-customer records, commissions, and withdrawals. It keeps WooCommerce customers and orders, settings, product rules, and license. Clear data is unavailable while a payout is processing. Orders attributed before a clear cannot recreate the removed commission history.
+
 = Can I update the free plugin without a key? =
 
 Yes. After directory publication, the free plugin uses the standard WordPress.org update system. Pro add-on updates are handled separately and never replace the free package with externally downloaded code.
@@ -316,6 +319,7 @@ Premium code belongs in the separate add-on plugin, not in a hidden directory in
 = 1.1.1 =
 * Added affiliate link with click count section.
 * Added Payout methods icons support.
+* Added Clear Data Featues
 * Fixed some issues
 
 = 1.0.0 =

@@ -26,7 +26,7 @@ final class REFM_Tracking {
 	}
 	public static function payload( $id, $expires ) {
 		$data = absint( $id ) . '.' . absint( $expires );
-		return $data . '.' . hash_hmac( 'sha256', $data, wp_salt( 'auth' ) );
+		return $data . '.' . hash_hmac( 'sha256', $data, REFM_Data::cookie_key() );
 	}
 	public static function referral() {
 		return REFM_Settings::program_enabled() ? self::cookie_id( self::COOKIE ) : 0;
@@ -90,7 +90,10 @@ final class REFM_Tracking {
 		$id = self::referral();
 		$user = $id ? get_userdata( $id ) : false;
 		if ( ! $user || $id === (int) $order->get_customer_id() || $id === get_current_user_id() || strtolower( $user->user_email ) === strtolower( $order->get_billing_email() ) ) { return; }
+		$state = REFM_Data::state();
+		if ( ! is_array( $state ) || ! empty( $state['clearing'] ) ) { return; }
 		$order->update_meta_data( '_refm_affiliate', $id );
+		$order->update_meta_data( '_refm_generation', (int) $state['generation'] );
 		$order->update_meta_data( '_refm_currency', REFM_Settings::get( 'currency' ) );
 		$order->update_meta_data( '_refm_purchase_policy', REFM_Settings::get( 'purchase_policy' ) );
 		$rates = array();
