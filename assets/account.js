@@ -1,5 +1,11 @@
 ﻿(function () {
     'use strict';
+    document.querySelectorAll('.refm-withdraw').forEach(function (form) {
+        form.addEventListener('invalid', function (event) {
+            const options = event.target.closest('.refm-withdraw-options');
+            if (options) options.open = true;
+        }, true);
+    });
     const method = document.getElementById('refm-method');
     if (method) {
         function payoutMethod() {

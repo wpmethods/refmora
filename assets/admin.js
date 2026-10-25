@@ -2,6 +2,32 @@
 (function () {
     'use strict';
     const config = window.refmAdmin || {};
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('.refm-choose-payment-icon, .refm-clear-payment-icon');
+        if (!button || !button.closest('.refm-admin')) return;
+        const field = button.closest('.refm-payment-icon-field');
+        const input = field.querySelector('.refm-payment-icon-value');
+        function update(url) {
+            input.value = url;
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+        if (button.classList.contains('refm-clear-payment-icon')) { update(''); return; }
+        if (!window.wp || !window.wp.media) return;
+        const frame = window.wp.media({title: button.title, library: {type: 'image'}, multiple: false});
+        frame.on('select', function () { update(frame.state().get('selection').first().toJSON().url); });
+        frame.open();
+    });
+    document.addEventListener('change', function (event) {
+        if (!event.target.matches('.refm-admin .refm-payment-icon-value')) return;
+        const field = event.target.closest('.refm-payment-icon-field');
+        const image = field.querySelector('img');
+        const valid = /^https?:\/\//i.test(event.target.value);
+        image.hidden = !valid;
+        field.querySelector('.refm-payment-icon-placeholder').hidden = valid;
+        field.querySelector('.refm-clear-payment-icon').hidden = !valid;
+        if (valid) image.src = event.target.value;
+        else image.removeAttribute('src');
+    });
     document.querySelectorAll('.refm-admin [data-refm-report-range]').forEach(function (select) {
         select.addEventListener('change', function () {
             if (select.form && select.form.requestSubmit) {

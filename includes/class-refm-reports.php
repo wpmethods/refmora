@@ -158,7 +158,7 @@ final class REFM_Reports {
 		$activity = $wpdb->get_row(
 			$wpdb->prepare(
 				'SELECT (SELECT COALESCE(SUM(clicks),0) FROM %i WHERE click_date >= %s AND click_date < %s) AS clicks, (SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s) AS customers',
-				REFM_Store::table( 'clicks' ),
+				REFM_Store::table( 'link_daily' ),
 				$range['start'],
 				$range['end'],
 				REFM_Store::table( 'customers' ),
@@ -175,5 +175,133 @@ final class REFM_Reports {
 			'clicks'    => absint( $activity['clicks'] ?? 0 ),
 			'customers' => absint( $activity['customers'] ?? 0 ),
 		);
+	}
+
+	/**
+	 * Restrict affiliate analytics to the signed-in approved account.
+	 *
+	 * @param int $affiliate_id Owner of the report.
+	 * @return bool Whether this exact account can view the report.
+	 */
+	private static function affiliate_available( $affiliate_id ) {
+		$affiliate_id = absint( $affiliate_id );
+		return $affiliate_id > 0 && get_current_user_id() === $affiliate_id && class_exists( 'REFM_Affiliates', false ) && 'approved' === REFM_Affiliates::status( $affiliate_id );
+	}
+
+	/**
+	 * Count completed referral orders in the same range and currency as the overview.
+	 *
+	 * @param array $range Validated overview reporting period.
+	 * @return int Completed referred orders, including held commissions.
+	 */
+	public static function converted( $range ) {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			return 0; }
+		global $wpdb;
+		$orders = self::order_storage();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- One prepared ledger aggregate joined to authoritative WooCommerce order storage; no orders are loaded individually.
+		return absint( $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i AS c INNER JOIN %i AS o ON o.%i=c.order_id WHERE c.currency=%s AND c.created_at >= %s AND c.created_at < %s AND o.%i=%s AND o.%i=%s', REFM_Store::table( 'commissions' ), $orders['table'], $orders['id'], REFM_Settings::get( 'currency' ), $range['utc_start'], $range['utc_end'], $orders['status'], 'wc-completed', $orders['type'], 'shop_order' ) ) );
+	}
+
+	/**
+	 * Read lifetime clicks and current completed referral orders for this affiliate only.
+	 *
+	 * @param int $affiliate_id Signed-in affiliate.
+	 * @return array Click and converted totals, or an empty array when access is denied.
+	 */
+	public static function affiliate_data( $affiliate_id ) {
+		if ( ! self::affiliate_available( $affiliate_id ) ) {
+			return array();
+		}
+		global $wpdb;
+		$orders = self::order_storage();
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- One prepared aggregate, scoped to the authenticated affiliate in both indexed subqueries; order status uses the authoritative WooCommerce storage.
+		$totals = $wpdb->get_row( $wpdb->prepare( 'SELECT (SELECT COALESCE(SUM(clicks),0) FROM %i WHERE affiliate_id=%d) AS clicks, (SELECT COUNT(*) FROM %i AS c INNER JOIN %i AS o ON o.%i=c.order_id WHERE c.affiliate_id=%d AND c.currency=%s AND o.%i=%s AND o.%i=%s) AS converted', REFM_Store::table( 'link_totals' ), $affiliate_id, REFM_Store::table( 'commissions' ), $orders['table'], $orders['id'], $affiliate_id, REFM_Settings::get( 'currency' ), $orders['status'], 'wc-completed', $orders['type'], 'shop_order' ), ARRAY_A );
+		return array(
+			'clicks'    => absint( $totals['clicks'] ?? 0 ),
+			'converted' => absint( $totals['converted'] ?? 0 ),
+		);
+	}
+
+	/**
+	 * Render this affiliate's own lifetime clicks and conversion rate.
+	 *
+	 * @param int $affiliate_id Account ID supplied by the Free dashboard hook.
+	 */
+	public static function render_affiliate( $affiliate_id ) {
+		$totals = self::affiliate_data( $affiliate_id );
+		if ( ! $totals ) {
+			return;
+		}
+		echo '<div class="refm-affiliate-activity" id="refm-affiliate-activity">';
+		self::activity_bars( array( 'compact' => true ), $totals['clicks'], $totals['converted'] );
+		echo '</div>';
+	}
+
+	/**
+	 * Select the authoritative WooCommerce storage for read-only joined aggregates.
+	 *
+	 * @return array Table and column identifiers from the installed WooCommerce configuration.
+	 */
+	public static function order_storage() {
+		global $wpdb;
+		if ( \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) {
+			return array(
+				'table'  => \Automattic\WooCommerce\Internal\DataStores\Orders\OrdersTableDataStore::get_orders_table_name(),
+				'id'     => 'id',
+				'status' => 'status',
+				'type'   => 'type',
+			);
+		}
+		return array(
+			'table'  => $wpdb->posts,
+			'id'     => 'ID',
+			'status' => 'post_status',
+			'type'   => 'post_type',
+		);
+	}
+
+	/**
+	 * Render two activity bars against the same recorded-click baseline.
+	 *
+	 * @param array $range Validated period or compact affiliate context.
+	 * @param int   $clicks Recorded clicks.
+	 * @param int   $converted Completed referred orders.
+	 */
+	public static function activity_bars( $range, $clicks, $converted ) {
+		$clicks    = max( 0, (int) $clicks );
+		$converted = max( 0, (int) $converted );
+		$compact   = ! empty( $range['compact'] );
+		$title_id  = $compact ? 'refm-affiliate-conversion-title' : 'refm-conversion-title';
+		$rate      = $clicks > 0 ? 100 * $converted / $clicks : 0;
+		$available = $clicks > 0 || 0 === $converted;
+		$rows      = array(
+			array(
+				'key'       => 'clicks',
+				'label'     => __( 'Total clicks', 'refmora' ),
+				'count'     => $clicks,
+				'rate'      => $clicks > 0 ? 100 : 0,
+				'available' => true,
+			),
+			array(
+				'key'       => 'converted',
+				'label'     => __( 'Converted', 'refmora' ),
+				'count'     => $converted,
+				'rate'      => $rate,
+				'available' => $available,
+			),
+		);
+		echo '<section class="refm-card refm-conversion-chart refm-activity-bars" aria-labelledby="' . esc_attr( $title_id ) . '"><h2 id="' . esc_attr( $title_id ) . '">' . esc_html__( 'Clicks & converted', 'refmora' ) . '</h2>';
+		if ( ! $compact ) {
+			echo '<p class="refm-muted">' . esc_html( $range['label'] ) . '</p>'; }
+		echo '<div class="refm-activity-bar-list">';
+		foreach ( $rows as $row ) {
+			$percent = $row['available'] ? number_format_i18n( $row['rate'], 2 ) . '%' : '—';
+			$width   = number_format( min( 100, $row['rate'] ), 4, '.', '' );
+			/* translators: 1: event count, 2: percentage of total clicks. */
+			$value_text = sprintf( __( '%1$s; %2$s of total clicks', 'refmora' ), number_format_i18n( $row['count'] ), $percent );
+			echo '<div class="refm-activity-bar-row refm-chart-series-' . esc_attr( $row['key'] ) . '"><div class="refm-activity-bar-heading"><span>' . esc_html( $row['label'] ) . '</span><span class="refm-activity-bar-values"><strong>' . esc_html( number_format_i18n( $row['count'] ) ) . '</strong><span>' . esc_html( $percent ) . '</span></span></div><div class="refm-activity-bar-track" role="progressbar" aria-label="' . esc_attr( $row['label'] ) . '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr( $width ) . '" aria-valuetext="' . esc_attr( $value_text ) . '"><span style="width:' . esc_attr( $width ) . '%"></span></div></div>';
+		}
+		echo '</div></section>';
 	}
 }

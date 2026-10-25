@@ -61,23 +61,9 @@ final class REFM_Tracking {
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
 		nocache_headers();
 	}
+	/** Compatibility entry point: one URL counter supplies every current click report. */
 	public static function record_click( $id ) {
-		global $wpdb;
-		if ( ! REFM_Settings::program_enabled() || ! self::active( $id ) || $id === get_current_user_id() || ! apply_filters( 'refm_tracking_allowed', true, $id ) || self::cookie_id( self::CLICK_COOKIE ) === $id ) { return false; }
-		$table = REFM_Store::table( 'clicks' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom aggregate/referral table has no WordPress CRUD API; the statement must read or update current counters.
-		$result = $wpdb->query( $wpdb->prepare( 'INSERT INTO %i (affiliate_id,click_date,clicks) VALUES (%d,%s,1) ON DUPLICATE KEY UPDATE clicks=clicks+1', $table, $id, current_time( 'Y-m-d' ) ) );
-		if ( false === $result ) { return false; }
-		$expires = time() + 30 * MINUTE_IN_SECONDS;
-		$value = self::payload( $id, $expires );
-		if ( ! headers_sent() ) {
-			setcookie( self::CLICK_COOKIE, $value, array( 'expires' => $expires, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
-			nocache_headers();
-		}
-		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- This compatibility name is defined by WordPress/LiteSpeed and must match the external cache integration API.
-		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
-		$_COOKIE[ self::CLICK_COOKIE ] = $value;
-		return true;
+		return REFM_Refer_Links::record( $id );
 	}
 	public static function register_customer( $customer_id ) {
 		global $wpdb;
@@ -95,8 +81,7 @@ final class REFM_Tracking {
 		$table = REFM_Store::table( 'customers' );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom aggregate/referral table has no WordPress CRUD API; the statement must read or update current counters.
 		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE customer_id=%d OR affiliate_id=%d', $table, $customer_id, $customer_id ) );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom aggregate/referral table has no WordPress CRUD API; the statement must read or update current counters.
-		$wpdb->delete( REFM_Store::table( 'clicks' ), array( 'affiliate_id' => $customer_id ) );
+		REFM_Refer_Links::erase_counters( $customer_id );
 	}
 	public static function attach( $order ) {
 		// Store API can attribute a draft before submission; sync still waits for a real order.

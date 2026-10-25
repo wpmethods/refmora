@@ -2,9 +2,10 @@
 defined( 'ABSPATH' ) || exit;
 
 final class REFM_Store {
+	const SCHEMA_VERSION = '5';
 	public static function table( $name ) {
 		global $wpdb;
-		if ( ! in_array( $name, array( 'commissions', 'payouts', 'clicks', 'customers' ), true ) ) { throw new InvalidArgumentException( 'Unknown Refmora table.' ); }
+		if ( ! in_array( $name, array( 'commissions', 'payouts', 'clicks', 'customers', 'link_clicks', 'url_clicks', 'links', 'link_daily', 'link_totals' ), true ) ) { throw new InvalidArgumentException( 'Unknown Refmora table.' ); }
 		return $wpdb->prefix . 'refm_' . $name;
 	}
 
@@ -14,16 +15,35 @@ final class REFM_Store {
 		$collate = $wpdb->get_charset_collate();
 		$commissions = self::table( 'commissions' );
 		$payouts = self::table( 'payouts' );
-		$clicks = self::table( 'clicks' );
 		$customers = self::table( 'customers' );
 		add_option( 'refm_identity_key', wp_generate_password( 64, true, true ), '', false );
-		dbDelta( "CREATE TABLE $clicks (
+		$links       = self::table( 'links' );
+		$link_daily  = self::table( 'link_daily' );
+		$link_totals = self::table( 'link_totals' );
+		dbDelta( "CREATE TABLE $links (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			url_hash char(64) NOT NULL,
+			link_url text NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY url_hash (url_hash)
+		) ENGINE=InnoDB $collate;" );
+		dbDelta( "CREATE TABLE $link_daily (
 			affiliate_id bigint(20) unsigned NOT NULL,
+			link_id bigint(20) unsigned NOT NULL,
 			click_date date NOT NULL,
 			clicks bigint(20) unsigned NOT NULL DEFAULT 0,
-			PRIMARY KEY  (affiliate_id,click_date),
+			PRIMARY KEY  (affiliate_id,link_id,click_date),
 			KEY click_date (click_date)
 		) ENGINE=InnoDB $collate;" );
+		dbDelta( "CREATE TABLE $link_totals (
+			affiliate_id bigint(20) unsigned NOT NULL,
+			link_id bigint(20) unsigned NOT NULL,
+			clicks bigint(20) unsigned NOT NULL DEFAULT 0,
+			PRIMARY KEY  (affiliate_id,link_id),
+			KEY ranked_clicks (clicks,link_id,affiliate_id),
+			KEY affiliate_rank (affiliate_id,clicks,link_id)
+		) ENGINE=InnoDB $collate;" );
+
 		dbDelta( "CREATE TABLE $customers (
 			customer_id bigint(20) unsigned NOT NULL,
 			affiliate_id bigint(20) unsigned NOT NULL,
@@ -70,6 +90,7 @@ final class REFM_Store {
 			KEY currency_created (currency,created_at)
 		) ENGINE=InnoDB $collate;" );
 		update_option( 'refm_db_version', REFM_VERSION, false );
+		update_option( 'refm_schema_version', self::SCHEMA_VERSION, false );
 	}
 
 	/** Serialize all balance mutations for one affiliate, including order refunds. */
@@ -120,7 +141,7 @@ final class REFM_Store {
 	}
 	public static function referral_stats( $affiliate_id = null ) {
 		global $wpdb;
-		$clicks = self::table( 'clicks' );
+		$clicks = self::table( 'link_totals' );
 		$customers = self::table( 'customers' );
 		$all = null === $affiliate_id ? 1 : 0;
 		$id = absint( $affiliate_id );

@@ -79,6 +79,9 @@ final class REFM_Settings {
 		$input = is_array( $input ) ? $input : array();
 		$defaults = self::defaults();
 		$clean = $defaults;
+		foreach ( array( 'paypal_icon', 'stripe_icon' ) as $key ) {
+			$clean[ $key ] = esc_url_raw( substr( REFM_Security::value( $input, $key, (string) self::get( $key ) ), 0, 2048 ), array( 'http', 'https' ) );
+		}
 		foreach ( array( 'referral_parameter', 'account_slug' ) as $key ) { $clean[ $key ] = self::url_name( REFM_Security::value( $input, $key, $defaults[ $key ] ), $key ); }
 		if ( function_exists( 'WC' ) && WC()->query ) {
 			foreach ( WC()->query->get_query_vars() as $key => $slug ) {
@@ -114,7 +117,7 @@ final class REFM_Settings {
 			$id = sanitize_key( REFM_Security::value( $row, 'id' ) );
 			if ( ! $id || in_array( $id, array( 'refm_paypal', 'refm_stripe' ), true ) || isset( $ids[ $id ] ) ) { $id = wp_generate_uuid4(); }
 			$ids[ $id ] = true;
-			$clean['methods'][] = array( 'id' => $id, 'name' => $name, 'instructions' => substr( sanitize_textarea_field( REFM_Security::value( $row, 'instructions' ) ), 0, 2000 ), 'active' => 'yes' === REFM_Security::value( $row, 'active' ) ? 'yes' : 'no' );
+			$clean['methods'][] = array( 'id' => $id, 'name' => $name, 'icon' => esc_url_raw( substr( REFM_Security::value( $row, 'icon' ), 0, 2048 ), array( 'http', 'https' ) ), 'instructions' => substr( sanitize_textarea_field( REFM_Security::value( $row, 'instructions' ) ), 0, 2000 ), 'active' => 'yes' === REFM_Security::value( $row, 'active' ) ? 'yes' : 'no' );
 		}
 		if ( 'single' === $clean['method_selection'] ) {
 			$found = false;

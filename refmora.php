@@ -3,7 +3,7 @@
  * Plugin Name: Refmora
  * Plugin URI: https://wpmethods.com/product/refmora-best-affiliate-plugin-for-woocommerce/
  * Description: WooCommerce referral tracking, product commissions and manual affiliate withdrawals. Optional Pro add-on.
- * Version: 1.0.0
+ * Version: 1.1.1
  * Author: WP Methods
  * Author URI: https://wpmethods.com/
  * Text Domain: refmora
@@ -15,12 +15,13 @@
  * WC requires at least: 8.2
  */
 defined( 'ABSPATH' ) || exit;
-define( 'REFM_VERSION', '1.0.0' );
+define( 'REFM_VERSION', '1.1.1' );
 define( 'REFM_FILE', __FILE__ );
 define( 'REFM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'REFM_URL', plugin_dir_url( __FILE__ ) );
 require_once REFM_PATH . 'includes/class-refm-store.php';
 require_once REFM_PATH . 'includes/class-refm-reports.php';
+require_once REFM_PATH . 'includes/class-refm-refer-links.php';
 require_once REFM_PATH . 'includes/class-refm-security.php';
 require_once REFM_PATH . 'includes/class-refm-ui.php';
 require_once REFM_PATH . 'includes/class-refm-settings.php';
@@ -64,12 +65,13 @@ add_action( 'plugins_loaded', function () {
 		} );
 		return;
 	}
-	if ( get_option( 'refm_db_version' ) !== REFM_VERSION ) {
+	if ( get_option( 'refm_db_version' ) !== REFM_VERSION || get_option( 'refm_schema_version' ) !== REFM_Store::SCHEMA_VERSION ) {
 		REFM_Store::install();
 	}
 	REFM_Settings::init();
 	REFM_Emails::init();
 	REFM_Design::init();
+	add_action( 'init', array( 'REFM_Refer_Links', 'migrate' ), 30 );
 	REFM_Tracking::init();
 	REFM_Checkout::init();
 	REFM_Commissions::init();

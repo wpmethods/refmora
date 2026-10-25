@@ -2,6 +2,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class REFM_Account {
+	const PAGE_SIZE = 5;
 	public static function endpoint() {
 		global $wp_rewrite;
 		foreach ( array_unique( array( 'refmora', REFM_Settings::account_slug() ) ) as $slug ) {
@@ -36,6 +37,7 @@ final class REFM_Account {
 				wp_enqueue_style( 'refm-panel', REFM_URL . 'assets/panel.css', array( 'refm-account' ), (string) filemtime( REFM_PATH . 'assets/panel.css' ) );
 				REFM_Design::enqueue( 'refm-panel' );
 				wp_enqueue_script( 'refm-account', REFM_URL . 'assets/account.js', array(), (string) filemtime( REFM_PATH . 'assets/account.js' ), true );
+				wp_enqueue_script( 'refm-refer-links', REFM_URL . 'assets/refer-links.js', array(), (string) filemtime( REFM_PATH . 'assets/refer-links.js' ), true );
 			}
 		} );
 		add_action( 'admin_init', array( __CLASS__, 'privacy' ) );
@@ -113,7 +115,7 @@ final class REFM_Account {
 			echo '<section class="refm-card refm-application"><span class="refm-icon-tile">' . wp_kses( REFM_UI::icon( 'clock' ), REFM_UI::allowed_html() ) . '</span><h3>' . esc_html__( 'Affiliate application', 'refmora' ) . '</h3><p>' . esc_html( 'pending' === $status ? __( 'Your application is awaiting administrator approval. Your links and withdrawal tools will be ready once you are approved.', 'refmora' ) : __( 'Your application was rejected. Please contact the store if you have questions.', 'refmora' ) ) . '</p></section></div>'; return;
 		}
 		echo '<nav class="refm-account-nav" aria-label="' . esc_attr__( 'Affiliate sections', 'refmora' ) . '">';
-		foreach ( array( 'earnings' => __( 'Overview', 'refmora' ), 'sharing' => __( 'Sharing tools', 'refmora' ), 'withdraw' => __( 'Withdraw', 'refmora' ), 'commissions' => __( 'History', 'refmora' ), 'customers' => __( 'Customers', 'refmora' ) ) as $key => $label ) { echo '<a href="#refm-' . esc_attr( $key ) . '">' . esc_html( $label ) . '</a>'; }
+		foreach ( array( 'earnings' => __( 'Overview', 'refmora' ), 'sharing' => __( 'Sharing tools', 'refmora' ), 'refer-links' => __( 'Top links', 'refmora' ), 'withdraw' => __( 'Withdraw', 'refmora' ), 'commissions' => __( 'History', 'refmora' ), 'customers' => __( 'Customers', 'refmora' ) ) as $key => $label ) { echo '<a href="#refm-' . esc_attr( $key ) . '">' . esc_html( $label ) . '</a>'; }
 		echo '</nav>';
 		if ( ! $active ) { echo '<p class="refm-notice">' . esc_html__( 'The affiliate program or your account is paused. Your history is still available.', 'refmora' ) . '</p>'; }
 		$commissions = REFM_Store::table( 'commissions' ); $payouts = REFM_Store::table( 'payouts' );
@@ -130,7 +132,8 @@ final class REFM_Account {
 		echo wp_kses( REFM_UI::metric( __( 'In withdrawal', 'refmora' ), REFM_Store::money( $reserved, $currency ), 'send', __( 'Requests in progress', 'refmora' ) ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'Total paid out', 'refmora' ), REFM_Store::money( $paid, $currency ), 'award', __( 'Completed payouts', 'refmora' ) ), REFM_UI::allowed_html() );
 		$stats = REFM_Store::referral_stats( $id );
-		echo '</div><div class="refm-referral-metrics">' . wp_kses( REFM_UI::metric( __( 'Referral clicks', 'refmora' ), number_format_i18n( $stats['clicks'] ), 'click' ), REFM_UI::allowed_html() ) . wp_kses( REFM_UI::metric( __( 'Registered customers', 'refmora' ), number_format_i18n( $stats['customers'] ), 'user' ), REFM_UI::allowed_html() ) . '</div><details class="refm-stat-help"><summary>' . esc_html__( 'How your activity is counted', 'refmora' ) . '</summary><p>' . esc_html__( 'Consecutive clicks on the same referral count once per browser within 30 minutes. Registered customers are new accounts created through your referral cookie. These statistics start from when tracking was enabled.', 'refmora' ) . '</p></details><div class="refm-grid refm-account-tools"><section class="refm-card refm-link-card" id="refm-sharing"><div class="refm-card-heading"><span class="refm-icon-tile">' . wp_kses( REFM_UI::icon( 'link' ), REFM_UI::allowed_html() ) . '</span><div><h3>' . esc_html__( 'Your referral link', 'refmora' ) . '</h3><p>' . esc_html__( 'One link to share your favorite store.', 'refmora' ) . '</p></div></div>';
+		echo '</div><div class="refm-referral-metrics">' . wp_kses( REFM_UI::metric( __( 'Referral clicks', 'refmora' ), number_format_i18n( $stats['clicks'] ), 'click', '', '#refm-refer-links' ), REFM_UI::allowed_html() ) . wp_kses( REFM_UI::metric( __( 'Registered customers', 'refmora' ), number_format_i18n( $stats['customers'] ), 'user', '', '#refm-customers' ), REFM_UI::allowed_html() ) . '</div><details class="refm-stat-help"><summary>' . esc_html__( 'How your activity is counted', 'refmora' ) . '</summary><p>' . esc_html__( 'Referral clicks are counted once per affiliate/destination URL per browser within 30 minutes. Public pages, posts, products and archives are supported. Totals are calculated from these same URL counters. Registered customers are new accounts created through your referral cookie. These statistics start from when tracking was enabled.', 'refmora' ) . '</p></details>';
+		echo '<div class="refm-grid refm-account-tools"><section class="refm-card refm-link-card" id="refm-sharing"><div class="refm-card-heading"><span class="refm-icon-tile">' . wp_kses( REFM_UI::icon( 'link' ), REFM_UI::allowed_html() ) . '</span><div><h3>' . esc_html__( 'Your referral link', 'refmora' ) . '</h3><p>' . esc_html__( 'One link to share your favorite store.', 'refmora' ) . '</p></div></div>';
 		if ( $active ) {
 			$link = add_query_arg( REFM_Settings::referral_parameter(), REFM_Tracking::token( $id ), home_url( '/' ) );
 		/* translators: %d: referral cookie lifetime in days. */
@@ -138,22 +141,35 @@ final class REFM_Account {
 			REFM_Sharing::generator();
 			self::best_sellers( $id );
 		} else { echo '<p class="refm-muted">' . esc_html__( 'Your sharing tools will return when your affiliate account and the program are active.', 'refmora' ) . '</p>'; }
-		echo '</section><section class="refm-card refm-withdraw-card" id="refm-withdraw"><div class="refm-card-heading"><span class="refm-icon-tile">' . wp_kses( REFM_UI::icon( 'payouts' ), REFM_UI::allowed_html() ) . '</span><div><h3>' . esc_html__( 'Request a withdrawal', 'refmora' ) . '</h3><p>' . esc_html__( 'Choose how you receive your earnings.', 'refmora' ) . '</p></div></div>';
+		echo '</section><div class="refm-account-sidebar">';
+		/** Render optional affiliate-scoped analytics above the withdrawal card. */
+		REFM_Reports::render_affiliate( $id );
+		do_action( 'refm_affiliate_activity_chart', $id );
+		echo '<section class="refm-card refm-withdraw-card" id="refm-withdraw"><div class="refm-card-heading"><span class="refm-icon-tile">' . wp_kses( REFM_UI::icon( 'payouts' ), REFM_UI::allowed_html() ) . '</span><div><h3>' . esc_html__( 'Request a withdrawal', 'refmora' ) . '</h3><p>' . esc_html__( 'Choose how you receive your earnings.', 'refmora' ) . '</p></div></div>';
 		$minimum = max( 0.01, (float) REFM_Settings::get( 'minimum' ) );
 		echo '<div class="refm-withdraw-balance"><span>' . esc_html__( 'Available to withdraw', 'refmora' ) . '</span><strong>' . wp_kses_post( REFM_Store::money( $balance, $currency ) ) . '</strong><p class="refm-muted">' . esc_html__( 'Minimum withdrawal:', 'refmora' ) . ' ' . wp_kses_post( REFM_Store::money( $minimum, $currency ) ) . '</p>';
+		$progress = min( 100, max( 0, $balance / $minimum * 100 ) );
+		$progress_value = number_format( $progress, 4, '.', '' );
+		$progress_level = $balance >= $minimum ? 'complete' : ( $progress <= 20 ? 'low' : ( $progress <= 50 ? 'medium' : 'high' ) );
+		echo '<div class="refm-withdraw-progress-heading"><span class="refm-withdraw-progress-label">' . esc_html__( 'Withdrawal progress', 'refmora' );
+		if ( $balance >= $minimum ) {
+			echo '<span class="refm-withdraw-ready" aria-hidden="true">' . wp_kses( REFM_UI::icon( 'check' ), REFM_UI::allowed_html() ) . '</span><span class="screen-reader-text">' . esc_html__( 'Minimum withdrawal reached', 'refmora' ) . '</span>';
+		}
+		echo '</span><strong data-level="' . esc_attr( $progress_level ) . '">' . esc_html( number_format_i18n( floor( $progress ), 0 ) . '%' ) . '</strong></div><div class="refm-withdraw-progress" data-level="' . esc_attr( $progress_level ) . '" role="progressbar" aria-label="' . esc_attr__( 'Progress toward minimum withdrawal', 'refmora' ) . '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr( $progress_value ) . '"><span style="width:' . esc_attr( $progress_value ) . '%"></span></div>';
 		/* translators: %s: formatted amount needed to reach the withdrawal minimum. */
-		if ( $balance < $minimum ) { echo '<progress max="' . esc_attr( $minimum ) . '" value="' . esc_attr( max( 0, $balance ) ) . '" aria-label="' . esc_attr__( 'Progress toward minimum withdrawal', 'refmora' ) . '"></progress><p class="refm-muted">' . sprintf( esc_html__( '%s more to reach your minimum.', 'refmora' ), wp_kses_post( REFM_Store::money( $minimum - $balance, $currency ) ) ) . '</p>'; }
+		if ( $balance < $minimum ) { echo '<p class="refm-muted">' . sprintf( esc_html__( '%s more to reach your minimum.', 'refmora' ), wp_kses_post( REFM_Store::money( $minimum - $balance, $currency ) ) ) . '</p>'; }
 		echo '</div>';
 		REFM_Gateways::connection_ui( $id );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
 		$methods = REFM_Settings::methods(); $open = $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i WHERE affiliate_id=%d AND status IN (\'pending\',\'approved\',\'processing\') LIMIT 1', $payouts, $id ) );
 		if ( $active && $methods && ! $open ) {
 			echo '<form method="post" class="refm-withdraw">'; wp_nonce_field( 'refm_account' );
-			echo '<input type="hidden" name="refm_action" value="withdraw"><label for="refm-method">' . esc_html__( 'Payout method', 'refmora' ) . '</label><select id="refm-method" name="method">';
+			echo '<input type="hidden" name="refm_action" value="withdraw"><details class="refm-withdraw-options"><summary>' . esc_html__( 'Payment options', 'refmora' ) . '</summary><div class="refm-withdraw-options-body"><label for="refm-method">' . esc_html__( 'Payout method', 'refmora' ) . '</label><select id="refm-method" name="method">';
 			foreach ( $methods as $method ) { echo '<option value="' . esc_attr( $method['id'] ) . '" data-provider="' . esc_attr( $method['provider'] ?? 'manual' ) . '" data-instructions="' . esc_attr( $method['instructions'] ) . '">' . esc_html( $method['name'] ) . '</option>'; }
-			echo '</select><p id="refm-instructions" class="refm-muted">' . esc_html( $methods[0]['instructions'] ) . '</p><label for="refm-details">' . esc_html__( 'Payment destination details', 'refmora' ) . '</label><textarea id="refm-details" name="details" rows="3" required minlength="3" maxlength="2000"></textarea><p class="refm-muted">' . esc_html__( 'Enter only the details needed to receive payment. Never share passwords or card security codes.', 'refmora' ) . '</p><button class="button refm-primary"' . disabled( $balance < $minimum, true, false ) . '>' . esc_html__( 'Withdraw available balance', 'refmora' ) . wp_kses( REFM_UI::icon( 'arrow' ), REFM_UI::allowed_html() ) . '</button></form>';
+			echo '</select><p id="refm-instructions" class="refm-muted">' . esc_html( $methods[0]['instructions'] ) . '</p><label for="refm-details">' . esc_html__( 'Payment destination details', 'refmora' ) . '</label><textarea id="refm-details" name="details" rows="3" required minlength="3" maxlength="2000"></textarea><p class="refm-muted">' . esc_html__( 'Enter only the details needed to receive payment. Never share passwords or card security codes.', 'refmora' ) . '</p></div></details><button class="button refm-primary"' . disabled( $balance < $minimum, true, false ) . '>' . esc_html__( 'Withdraw available balance', 'refmora' ) . wp_kses( REFM_UI::icon( 'arrow' ), REFM_UI::allowed_html() ) . '</button></form>';
 		} else { echo '<p class="refm-notice">' . esc_html( $open ? __( 'Your withdrawal is being reviewed. Follow its status in the history below.', 'refmora' ) : __( 'Withdrawals are currently unavailable.', 'refmora' ) ) . '</p>'; }
-		echo '</section></div><p class="refm-muted refm-balance-note">' . esc_html__( 'Refunds adjust your earnings. Refunds after a payout reduce future earnings. History keeps each transaction in its original currency.', 'refmora' ) . '</p>';
+		echo '<p class="refm-muted refm-balance-note">' . esc_html__( 'Refunds adjust your earnings. Refunds after a payout reduce future earnings. History keeps each transaction in its original currency.', 'refmora' ) . '</p></section></div></div>';
+		REFM_Refer_Links::render( $id, 'affiliate' );
 		self::history( 'commissions', $id ); self::history( 'payouts', $id ); self::customers( $id ); echo '</div>';
 	}
 	private static function best_sellers( $id ) {
@@ -232,39 +248,58 @@ final class REFM_Account {
 		return $digits ? substr( $digits, 0, min( 3, max( 0, strlen( $digits ) - 2 ) ) ) . '*****' : '';
 	}
 	private static function pagination( $key, $page, $count, $anchor ) {
-		if ( $count <= 10 ) { return; }
+		$total = max( 1, (int) ceil( $count / self::PAGE_SIZE ) );
+		if ( $total <= 1 ) { return; }
+		$page = min( REFM_Security::page_number( $page ), $total );
 		$args = array();
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
-		foreach ( array( 'refm_cp', 'refm_pp', 'refm_rp' ) as $other ) { if ( isset( $_GET[ $other ] ) ) { $args[ $other ] = REFM_Security::page_number( absint( ( isset( $_GET[ $other ] ) && is_scalar( $_GET[ $other ] ) ? wp_unslash( $_GET[ $other ] ) : '1' ) ) ); } }
-		echo '<nav class="refm-pagination" aria-label="' . esc_attr__( 'History pages', 'refmora' ) . '">';
-		foreach ( array( -1 => __( 'Previous', 'refmora' ), 1 => __( 'Next', 'refmora' ) ) as $step => $label ) {
-			if ( -1 === $step && $page > 1 || 1 === $step && $page * 10 < $count ) {
-				$args[ $key ] = $page + $step;
-				echo '<a class="button refm-primary" href="' . esc_url( add_query_arg( $args, wc_get_account_endpoint_url( 'refmora' ) ) . '#' . $anchor ) . '">' . esc_html( $label ) . '</a>';
+		foreach ( array( 'refm_cp', 'refm_pp', 'refm_rp', 'refm_lp' ) as $other ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve only bounded read-only table pages; ownership is checked before each table query.
+			if ( isset( $_GET[ $other ] ) ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Shared validator rejects non-scalar or unbounded pagination values.
+				$args[ $other ] = REFM_Security::page( $_GET, $other );
 			}
-		/* translators: %1$d: current page, %2$d: total pages. */
-			if ( -1 === $step ) { echo '<span>' . sprintf( esc_html__( 'Page %1$d of %2$d', 'refmora' ), esc_html( $page ), (int) ceil( $count / 10 ) ) . '</span>'; }
 		}
-		echo '</nav>';
+		$base = wc_get_account_endpoint_url( 'refmora' );
+		$link = static function ( $target, $label ) use ( $args, $base, $key, $anchor ) {
+			$args[ $key ] = $target;
+			echo '<a class="page-numbers refm-primary" href="' . esc_url( add_query_arg( $args, $base ) . '#' . $anchor ) . '">' . esc_html( $label ) . '</a>';
+		};
+		/* translators: 1: current page, 2: total pages. */
+		echo '<nav class="refm-pagination refm-admin-pagination" aria-label="' . esc_attr__( 'Table pages', 'refmora' ) . '"><span class="refm-page-summary">' . esc_html( sprintf( __( 'Page %1$d of %2$d', 'refmora' ), $page, $total ) ) . '</span><div class="refm-page-links">';
+		if ( $page > 1 ) { $link( $page - 1, __( 'Previous', 'refmora' ) ); }
+		$pages = array_unique( array( 1, $total, max( 1, $page - 1 ), $page, min( $total, $page + 1 ) ) );
+		sort( $pages );
+		$previous = 0;
+		foreach ( $pages as $number ) {
+			if ( $previous && $number - $previous > 1 ) { echo '<span class="page-numbers dots" aria-hidden="true">&hellip;</span>'; }
+			if ( $number === $page ) {
+				echo '<span class="page-numbers current" aria-current="page">' . esc_html( number_format_i18n( $number ) ) . '</span>';
+			} else { $link( $number, number_format_i18n( $number ) ); }
+			$previous = $number;
+		}
+		if ( $page < $total ) { $link( $page + 1, __( 'Next', 'refmora' ) ); }
+		echo '</div></nav>';
 	}
+
 	private static function customers( $id ) {
 		global $wpdb;
 		$table = REFM_Store::table( 'customers' );
 		$count = REFM_Store::referral_stats( $id )['customers'];
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
-		$page = min( REFM_Security::page_number( absint( ( isset( $_GET[ 'refm_rp' ] ) && is_scalar( $_GET[ 'refm_rp' ] ) ? wp_unslash( $_GET[ 'refm_rp' ] ) : '1' ) ) ), max( 1, (int) ceil( $count / 10 ) ) );
+		$page = min( REFM_Security::page_number( absint( ( isset( $_GET[ 'refm_rp' ] ) && is_scalar( $_GET[ 'refm_rp' ] ) ? wp_unslash( $_GET[ 'refm_rp' ] ) : '1' ) ) ), max( 1, (int) ceil( $count / self::PAGE_SIZE ) ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$ids = $wpdb->get_col( $wpdb->prepare( 'SELECT customer_id FROM %i WHERE affiliate_id=%d ORDER BY created_at DESC,customer_id DESC LIMIT 10 OFFSET %d', $table, $id, ( $page - 1 ) * 10 ) );
+		$ids = $wpdb->get_col( $wpdb->prepare( 'SELECT customer_id FROM %i WHERE affiliate_id=%d ORDER BY created_at DESC,customer_id DESC LIMIT %d OFFSET %d', $table, $id, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) );
 		if ( $ids ) { update_meta_cache( 'user', $ids ); }
-		echo '<section class="refm-card refm-history" id="refm-customers"><h3>' . wp_kses( REFM_UI::icon( 'affiliates' ), REFM_UI::allowed_html() ) . esc_html__( 'Your registered customers', 'refmora' ) . '</h3><p class="refm-muted">' . esc_html__( 'Only first names and masked contact details are shown.', 'refmora' ) . '</p><div class="refm-table-scroll"><table><thead><tr><th>' . esc_html__( 'First name', 'refmora' ) . '</th><th>' . esc_html__( 'Email', 'refmora' ) . '</th><th>' . esc_html__( 'Phone', 'refmora' ) . '</th></tr></thead><tbody>';
+		echo '<section class="refm-card refm-history" id="refm-customers"><h3>' . wp_kses( REFM_UI::icon( 'affiliates' ), REFM_UI::allowed_html() ) . esc_html__( 'Your registered customers', 'refmora' ) . '</h3><p class="refm-muted">' . esc_html__( 'Only first names and masked contact details are shown.', 'refmora' ) . '</p><div class="refm-table-scroll"><table><thead><tr><th scope="col">' . esc_html__( 'SL', 'refmora' ) . '</th><th>' . esc_html__( 'First name', 'refmora' ) . '</th><th>' . esc_html__( 'Email', 'refmora' ) . '</th><th>' . esc_html__( 'Phone', 'refmora' ) . '</th></tr></thead><tbody>';
+		$serial = ( $page - 1 ) * self::PAGE_SIZE;
 		foreach ( $ids as $customer_id ) {
 			$name = get_user_meta( $customer_id, 'first_name', true ) ?: get_user_meta( $customer_id, 'billing_first_name', true );
 			$user = get_userdata( $customer_id );
 			$email = self::masked_email( $user ? $user->user_email : '' );
 			$phone = self::masked_phone( get_user_meta( $customer_id, 'billing_phone', true ) );
-			echo '<tr><td>' . esc_html( $name ?: __( 'Customer', 'refmora' ) ) . '</td><td>' . esc_html( $email ?: '—' ) . '</td><td>' . esc_html( $phone ?: '—' ) . '</td></tr>';
+			echo '<tr><td>' . esc_html( number_format_i18n( ++$serial ) ) . '</td><td>' . esc_html( $name ?: __( 'Customer', 'refmora' ) ) . '</td><td>' . esc_html( $email ?: '—' ) . '</td><td>' . esc_html( $phone ?: '—' ) . '</td></tr>';
 		}
-		if ( ! $ids ) { echo '<tr><td colspan="3" class="refm-empty">' . esc_html__( 'No registered customers yet.', 'refmora' ) . '</td></tr>'; }
+		if ( ! $ids ) { echo '<tr><td colspan="4" class="refm-empty">' . esc_html__( 'No registered customers yet.', 'refmora' ) . '</td></tr>'; }
 		echo '</tbody></table></div>'; self::pagination( 'refm_rp', esc_html( $page ), $count, 'refm-customers' ); echo '</section>';
 	}
 	private static function commission_items( $row, $id ) {
@@ -310,9 +345,9 @@ final class REFM_Account {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
 		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE affiliate_id=%d', $table, $id ) );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
-		$page = min( REFM_Security::page_number( absint( ( isset( $_GET[ $key ] ) && is_scalar( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '1' ) ) ), max( 1, (int) ceil( $count / 10 ) ) );
+		$page = min( REFM_Security::page_number( absint( ( isset( $_GET[ $key ] ) && is_scalar( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '1' ) ) ), max( 1, (int) ceil( $count / self::PAGE_SIZE ) ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE affiliate_id=%d ORDER BY id DESC LIMIT 10 OFFSET %d', $table, $id, ( $page - 1 ) * 10 ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE affiliate_id=%d ORDER BY id DESC LIMIT %d OFFSET %d', $table, $id, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) );
 		echo '<section class="refm-card refm-history" id="refm-' . esc_attr( $type ) . '"><h3>' . wp_kses( REFM_UI::icon( $type ), REFM_UI::allowed_html() ) . esc_html( $commission ? __( 'Commission history', 'refmora' ) : __( 'Withdrawal history', 'refmora' ) ) . '</h3><div class="refm-table-scroll"><table><thead><tr><th>' . esc_html__( 'Reference', 'refmora' ) . '</th><th>' . esc_html__( 'Date', 'refmora' ) . '</th>';
 		if ( $commission ) { echo '<th>' . esc_html__( 'Items / commission rate', 'refmora' ) . '</th>'; }
 		echo '<th>' . esc_html__( 'Amount', 'refmora' ) . '</th><th>' . esc_html__( 'Status', 'refmora' ) . '</th><th>' . esc_html( $commission ? __( 'Adjustment', 'refmora' ) : __( 'Method / note', 'refmora' ) ) . '</th></tr></thead><tbody>';
@@ -323,7 +358,7 @@ final class REFM_Account {
 			if ( $commission ) {
 				if ( 'repeat' === $row->eligibility ) { echo esc_html__( 'Repeat purchase excluded', 'refmora' ); }
 				else { echo (float) $row->paid_amount > (float) $row->amount ? wp_kses_post( REFM_Store::money( (float) $row->amount - (float) $row->paid_amount, $row->currency ) ) : '&mdash;'; }
-			} else { echo esc_html( $row->method ); REFM_Gateways::summary( $row->id ); if ( $row->note ) { echo '<small class="refm-note">' . esc_html( $row->note ) . '</small>'; } }
+			} else { echo wp_kses( REFM_UI::payment_method( $row->method ), REFM_UI::allowed_html() ); echo '<details class="refm-payment-details"><summary>' . esc_html__( 'Payment details', 'refmora' ) . '</summary><div class="refm-payout-details">' . nl2br( esc_html( $row->details ) ) . '</div></details>'; REFM_Gateways::summary( $row->id ); if ( $row->note ) { echo '<small class="refm-note">' . esc_html( $row->note ) . '</small>'; } }
 			echo '</td></tr>';
 		}
 		if ( ! $rows ) { echo '<tr><td colspan="' . ( $commission ? '6' : '5' ) . '" class="refm-empty">' . esc_html__( 'Nothing here yet. Your activity will appear here.', 'refmora' ) . '</td></tr>'; }
@@ -331,7 +366,7 @@ final class REFM_Account {
 	}
 	public static function privacy() {
 		if ( function_exists( 'wp_add_privacy_policy_content' ) ) {
-			wp_add_privacy_policy_content( 'Refmora', '<p>' . esc_html__( 'We count referral clicks in daily aggregate counters, without visitor IP addresses or browser fingerprints. A second signed cookie suppresses repeated consecutive clicks for 30 minutes. New customer account registrations may be linked to the referring affiliate while a valid referral cookie is present. Affiliates see the customer first name and masked email and phone details; full contact details, surnames and other account details are not shown. Registration attribution and affiliate counters are removed through WordPress personal-data erasure or when the associated account is deleted.', 'refmora' ) . '</p>' );
+			wp_add_privacy_policy_content( 'Refmora', '<p>' . esc_html__( 'We count referral clicks in daily aggregate counters, without visitor IP addresses or browser fingerprints. Public destination URLs are stored once in a shared link directory. Daily counters and lifetime affiliate/link totals reference that link ID. Ranking lists use indexed lifetime totals; charts use daily counters. Both update in one transaction. Unified URL tracking starts with fresh counters. Obsolete product and aggregate counter tables are removed. A signed cookie remembers up to 12 recently visited affiliate/URL pairs for 30-minute duplicate suppression. Canonical public URLs exclude referral and marketing parameters; visitor IP addresses, browser fingerprints, private account pages and search terms are not stored. URL counters are included in affiliate privacy exports and erasure. New customer account registrations may be linked to the referring affiliate while a valid referral cookie is present. Affiliates see the customer first name and masked email and phone details; full contact details, surnames and other account details are not shown. Registration attribution and affiliate counters are removed through WordPress personal-data erasure or when the associated account is deleted.', 'refmora' ) . '</p>' );
 			wp_add_privacy_policy_content( 'Refmora', '<p>' . esc_html__( 'Our affiliate program uses a signed referral cookie to attribute purchases. The cookie stores an affiliate identifier and expiry time. Affiliate applications may include a website/profile URL and promotion plan when these fields are enabled for administrator review. We store affiliate enrollment, order-linked commissions, and withdrawal requests with payment destination details in our WordPress database. Authorized store managers can access these records to process payouts. Referral cookies expire after the configured duration. Financial records are retained until the store administrator removes them according to the store retention policy. If automatic payouts are configured, payment recipient identifiers, payout amounts and currencies are sent to PayPal or Stripe when a store manager sends an approved withdrawal. Connected Stripe account identifiers are stored for this purpose. Provider transaction records are retained for financial reconciliation.', 'refmora' ) . '</p>' );
 		}
 	}
@@ -372,12 +407,18 @@ final class REFM_Account {
 			foreach ( $referral as $key => $value ) { $values[] = array( 'name' => $key, 'value' => (string) $value ); }
 			$data[] = array( 'group_id' => 'refm-customers', 'group_label' => __( 'Affiliate customer registration', 'refmora' ), 'item_id' => 'refm-customer-' . $referral['customer_id'], 'data' => $values );
 		}
-		$clicks = REFM_Store::table( 'clicks' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$days = $wpdb->get_results( $wpdb->prepare( 'SELECT click_date,clicks FROM %i WHERE affiliate_id=%d ORDER BY click_date ASC LIMIT 50 OFFSET %d', $clicks, $user->ID, ( $page - 1 ) * 50 ), ARRAY_A );
-		if ( count( $days ) === 50 ) { $done = false; }
-		foreach ( $days as $day ) {
-			$data[] = array( 'group_id' => 'refm-clicks', 'group_label' => __( 'Affiliate click counters', 'refmora' ), 'item_id' => 'refm-clicks-' . $day['click_date'], 'data' => array( array( 'name' => 'click_date', 'value' => $day['click_date'] ), array( 'name' => 'clicks', 'value' => (string) $day['clicks'] ) ) );
+		foreach ( array( 'link_daily', 'link_totals' ) as $counter ) {
+			$is_daily = 'link_daily' === $counter;
+			$columns  = $is_daily ? 'd.link_id,k.link_url,d.click_date,d.clicks' : 'd.link_id,k.link_url,d.clicks';
+			$order    = $is_daily ? 'd.link_id ASC,d.click_date ASC' : 'd.link_id ASC';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Columns and order are fixed local alternatives; table names, subject ID and page bounds are prepared.
+			$records = $wpdb->get_results( $wpdb->prepare( "SELECT $columns FROM %i AS d INNER JOIN %i AS k ON k.id=d.link_id WHERE d.affiliate_id=%d ORDER BY $order LIMIT 50 OFFSET %d", REFM_Store::table( $counter ), REFM_Store::table( 'links' ), $user->ID, ( $page - 1 ) * 50 ), ARRAY_A );
+			if ( count( $records ) === 50 ) { $done = false; }
+			foreach ( $records as $row ) {
+				$values = array( array( 'name' => 'link_url', 'value' => $row['link_url'] ), array( 'name' => 'clicks', 'value' => (string) $row['clicks'] ) );
+				if ( $is_daily ) { $values[] = array( 'name' => 'click_date', 'value' => $row['click_date'] ); }
+				$data[] = array( 'group_id' => 'refm-' . str_replace( '_', '-', $counter ), 'group_label' => $is_daily ? __( 'Affiliate daily link counters', 'refmora' ) : __( 'Affiliate lifetime link totals', 'refmora' ), 'item_id' => 'refm-' . $counter . '-' . $row['link_id'] . ( $is_daily ? '-' . $row['click_date'] : '' ), 'data' => $values );
+			}
 		}
 		foreach ( array( 'commissions', 'payouts' ) as $type ) {
 			$table = REFM_Store::table( $type );
@@ -406,8 +447,11 @@ final class REFM_Account {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
 		$removed = $wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE customer_id=%d OR affiliate_id=%d', $customers, $user->ID, $user->ID ) );
 		$result['items_removed'] = $removed > 0 || $result['items_removed'];
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$result['items_removed'] = $wpdb->delete( REFM_Store::table( 'clicks' ), array( 'affiliate_id' => $user->ID ) ) > 0 || $result['items_removed'];
+		$erased = REFM_Refer_Links::erase_counters( $user->ID );
+		if ( is_wp_error( $erased ) ) {
+			$result['items_retained'] = true;
+			$result['messages'][] = __( 'Referral counters could not be erased. Please try again.', 'refmora' );
+		} else { $result['items_removed'] = $erased > 0 || $result['items_removed']; }
 		foreach ( array( 'commissions', 'payouts' ) as $type ) {
 			$table = REFM_Store::table( $type );
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
