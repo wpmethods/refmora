@@ -128,7 +128,7 @@ final class REFM_Account {
 		$balance = REFM_Store::balance( $id, $currency );
 		echo '<div class="refm-metrics" id="refm-earnings">';
 		echo wp_kses( REFM_UI::metric( __( 'Available balance', 'refmora' ), REFM_Store::money( $balance, $currency ), 'wallet', __( 'Ready for withdrawal', 'refmora' ) ), REFM_UI::allowed_html() );
-		echo wp_kses( REFM_UI::metric( __( 'Pending earnings', 'refmora' ), REFM_Store::money( $pending, $currency ), 'clock', __( 'Awaiting order completion or the waiting period', 'refmora' ) ), REFM_UI::allowed_html() );
+		echo wp_kses( REFM_UI::metric( __( 'Pending earnings', 'refmora' ), REFM_Store::money( $pending, $currency ), 'clock', 'manual' === REFM_Settings::get( 'release_mode' ) ? __( 'Awaiting administrator confirmation', 'refmora' ) : __( 'Awaiting order completion or the waiting period', 'refmora' ) ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'In withdrawal', 'refmora' ), REFM_Store::money( $reserved, $currency ), 'send', __( 'Requests in progress', 'refmora' ) ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'Total paid out', 'refmora' ), REFM_Store::money( $paid, $currency ), 'award', __( 'Completed payouts', 'refmora' ) ), REFM_UI::allowed_html() );
 		$stats = REFM_Store::referral_stats( $id );
@@ -343,11 +343,11 @@ final class REFM_Account {
 		$commission = 'commissions' === $type; $table = REFM_Store::table( $type );
 		$key = $commission ? 'refm_cp' : 'refm_pp';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE affiliate_id=%d', $table, $id ) );
+		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE affiliate_id=%d AND trashed_at IS NULL', $table, $id ) );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
 		$page = min( REFM_Security::page_number( absint( ( isset( $_GET[ $key ] ) && is_scalar( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : '1' ) ) ), max( 1, (int) ceil( $count / self::PAGE_SIZE ) ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE affiliate_id=%d ORDER BY id DESC LIMIT %d OFFSET %d', $table, $id, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE affiliate_id=%d AND trashed_at IS NULL ORDER BY id DESC LIMIT %d OFFSET %d', $table, $id, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) );
 		echo '<section class="refm-card refm-history" id="refm-' . esc_attr( $type ) . '"><h3>' . wp_kses( REFM_UI::icon( $type ), REFM_UI::allowed_html() ) . esc_html( $commission ? __( 'Commission history', 'refmora' ) : __( 'Withdrawal history', 'refmora' ) ) . '</h3><div class="refm-table-scroll"><table><thead><tr><th>' . esc_html__( 'Reference', 'refmora' ) . '</th><th>' . esc_html__( 'Date', 'refmora' ) . '</th>';
 		if ( $commission ) { echo '<th>' . esc_html__( 'Items / commission rate', 'refmora' ) . '</th>'; }
 		echo '<th>' . esc_html__( 'Amount', 'refmora' ) . '</th><th>' . esc_html__( 'Status', 'refmora' ) . '</th><th>' . esc_html( $commission ? __( 'Adjustment', 'refmora' ) : __( 'Method / note', 'refmora' ) ) . '</th></tr></thead><tbody>';

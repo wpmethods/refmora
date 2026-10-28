@@ -3,7 +3,7 @@
  * Plugin Name: Refmora
  * Plugin URI: https://wpmethods.com/product/refmora-best-affiliate-plugin-for-woocommerce/
  * Description: WooCommerce referral tracking, product commissions and manual affiliate withdrawals. Optional Pro add-on.
- * Version: 1.1.1
+ * Version: 1.1.2
  * Author: WP Methods
  * Author URI: https://wpmethods.com/
  * Text Domain: refmora
@@ -15,11 +15,12 @@
  * WC requires at least: 8.2
  */
 defined( 'ABSPATH' ) || exit;
-define( 'REFM_VERSION', '1.1.1' );
+define( 'REFM_VERSION', '1.1.2' );
 define( 'REFM_FILE', __FILE__ );
 define( 'REFM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'REFM_URL', plugin_dir_url( __FILE__ ) );
 require_once REFM_PATH . 'includes/class-refm-data.php';
+require_once REFM_PATH . 'includes/class-refm-records.php';
 require_once REFM_PATH . 'includes/class-refm-store.php';
 require_once REFM_PATH . 'includes/class-refm-reports.php';
 require_once REFM_PATH . 'includes/class-refm-refer-links.php';

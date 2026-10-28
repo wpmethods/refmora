@@ -2,7 +2,7 @@
 defined( 'ABSPATH' ) || exit;
 
 final class REFM_Store {
-	const SCHEMA_VERSION = '5';
+	const SCHEMA_VERSION = '7';
 	public static function table( $name ) {
 		global $wpdb;
 		if ( ! in_array( $name, array( 'commissions', 'payouts', 'clicks', 'customers', 'link_clicks', 'url_clicks', 'links', 'link_daily', 'link_totals' ), true ) ) { throw new InvalidArgumentException( 'Unknown Refmora table.' ); }
@@ -63,6 +63,11 @@ final class REFM_Store {
 			paid_amount decimal(20,6) NOT NULL DEFAULT 0,
 			currency varchar(3) NOT NULL,
 			status varchar(20) NOT NULL DEFAULT 'pending',
+			review_status varchar(20) NOT NULL DEFAULT '',
+			reviewed_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			reviewed_at datetime DEFAULT NULL,
+			trashed_at datetime DEFAULT NULL,
+			trashed_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			payout_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,
@@ -82,6 +87,8 @@ final class REFM_Store {
 			method varchar(190) NOT NULL,
 			details text NOT NULL,
 			status varchar(20) NOT NULL DEFAULT 'pending',
+			trashed_at datetime DEFAULT NULL,
+			trashed_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			note text NOT NULL,
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,

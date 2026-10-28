@@ -82,5 +82,13 @@ final class REFM_Tools {
 			echo '<div class="refm-tools-action-row"><div class="refm-field"><label for="refm-clear-confirmation">' . esc_html__( 'Type CLEAR DATA to confirm', 'refmora' ) . '</label><input type="text" id="refm-clear-confirmation" name="confirmation" placeholder="CLEAR DATA" pattern="CLEAR DATA" maxlength="10" required autocomplete="off"></div><button class="button refm-primary refm-danger">' . wp_kses( REFM_UI::icon( 'trash' ), REFM_UI::allowed_html() ) . esc_html__( 'Clear data', 'refmora' ) . '</button></div></form></section>';
 		}
 		if ( has_action( 'refm_export_data_panel' ) ) { do_action( 'refm_export_data_panel' ); } else { REFM_License::premium_card( __( 'Export data', 'refmora' ), __( 'CSV exports of affiliates, commissions, withdrawals, customers and referral clicks are provided by the separate Pro add-on.', 'refmora' ) ); }
+		if ( current_user_can( 'manage_options' ) ) {
+			if ( has_action( 'refm_database_backup_panel' ) ) {
+				/** Render the separately distributed Pro database backup panel after Export Data. */
+				do_action( 'refm_database_backup_panel' );
+			} else {
+				REFM_License::premium_card( __( 'Database Backup & Restore', 'refmora' ), __( 'Download and restore complete Refmora settings, affiliate profiles, links, clicks, commissions and withdrawals with the separate Refmora Pro add-on.', 'refmora' ) );
+			}
+		}
 	}
 }

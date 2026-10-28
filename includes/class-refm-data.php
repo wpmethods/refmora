@@ -45,6 +45,32 @@ final class REFM_Data {
 	}
 
 	/**
+	 * Fresh per-affiliate revocation marker, retained after permanent profile deletion.
+	 *
+	 * @param int $id Affiliate user ID.
+	 * @return int Current attribution epoch.
+	 */
+	public static function affiliate_epoch( $id ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Uncached admission check prevents an in-flight order or old cookie from recreating a permanently deleted affiliate's history.
+		$value = $wpdb->get_var( $wpdb->prepare( 'SELECT option_value FROM %i WHERE option_name=%s', $wpdb->options, 'refm_affiliate_epoch_' . absint( $id ) ) );
+		return '' === $wpdb->last_error ? (int) $value : -1;
+	}
+
+	/**
+	 * Keep a permanently erased commission from being recreated by order callbacks.
+	 *
+	 * @param int $id WooCommerce order ID.
+	 * @return bool Whether the order's commission has been permanently deleted.
+	 */
+	public static function commission_deleted( $id ) {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Uncached tombstone check is repeated under the affiliate lock before a commission can be recreated.
+		$deleted = $wpdb->get_var( $wpdb->prepare( 'SELECT option_value FROM %i WHERE option_name=%s', $wpdb->options, 'refm_deleted_commission_' . absint( $id ) ) );
+		return '' !== $wpdb->last_error || null !== $deleted;
+	}
+
+	/**
 	 * Ignore saved attribution from a cleared program while leaving order metadata intact.
 	 *
 	 * @param WC_Order $order WooCommerce order whose attribution is being synchronized.
@@ -52,7 +78,11 @@ final class REFM_Data {
 	 */
 	public static function order_is_current( $order ) {
 		$state = self::state();
-		return is_array( $state ) && empty( $state['clearing'] ) && (int) $order->get_meta( '_refm_generation' ) === (int) $state['generation'];
+		$epoch = self::affiliate_epoch( $order->get_meta( '_refm_affiliate' ) );
+		return is_array( $state ) && empty( $state['clearing'] )
+			&& (int) $order->get_meta( '_refm_generation' ) === (int) $state['generation']
+			&& $epoch >= 0 && (int) $order->get_meta( '_refm_affiliate_epoch' ) === $epoch
+			&& ! self::commission_deleted( $order->get_id() );
 	}
 
 	/**

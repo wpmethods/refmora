@@ -8,16 +8,32 @@ final class REFM_Admin {
 		add_action( 'admin_enqueue_scripts', function ( $hook ) {
 			if ( 'woocommerce_page_refmora' === $hook ) {
 				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only routing; loading the media chooser does not modify settings or attachments.
-				if ( 'settings' === REFM_Security::value( $_GET, 'tab' ) ) { wp_enqueue_media(); }
+				if ( 'settings' === REFM_Security::value( $_GET, 'tab' ) ) {
+					wp_enqueue_media();
+					wp_enqueue_style( 'dashicons' );
+				}
 				wp_enqueue_style( 'refm-admin', REFM_URL . 'assets/refmora.css', array(), (string) filemtime( REFM_PATH . 'assets/refmora.css' ) );
 				wp_enqueue_style( 'refm-panel', REFM_URL . 'assets/panel.css', array( 'refm-admin' ), (string) filemtime( REFM_PATH . 'assets/panel.css' ) );
 				REFM_Design::enqueue( 'refm-panel' );
 				wp_enqueue_script( 'refm-admin', REFM_URL . 'assets/admin.js', array(), (string) filemtime( REFM_PATH . 'assets/admin.js' ), true );
 				wp_enqueue_script( 'refm-refer-links', REFM_URL . 'assets/refer-links.js', array(), (string) filemtime( REFM_PATH . 'assets/refer-links.js' ), true );
-				wp_localize_script( 'refm-admin', 'refmAdmin', array( 'unsaved' => __( 'You have unsaved changes.', 'refmora' ), 'saving' => __( 'Saving your changes...', 'refmora' ) ) );
+				wp_localize_script( 'refm-admin', 'refmAdmin', array(
+					'unsaved'             => __( 'You have unsaved changes.', 'refmora' ),
+					'saving'              => __( 'Saving your changes...', 'refmora' ),
+					'clearing_trash'      => __( 'Clearing Trash...', 'refmora' ),
+					'clear_trash_done'    => __( 'Trash cleared.', 'refmora' ),
+					'clear_trash_partial' => __( 'Some items could not be deleted.', 'refmora' ),
+					'clear_trash_error'   => __( 'Clearing could not finish. Some items may have been deleted. Refresh Trash before trying again.', 'refmora' ),
+					/* translators: %d: number of records permanently deleted so far. */
+					'trash_removed'       => __( 'Deleted: %d', 'refmora' ),
+				) );
 			}
 		} );
 		add_action( 'admin_post_refm_payout', array( __CLASS__, 'payout_action' ) );
+		add_action( 'admin_post_refm_commission', array( __CLASS__, 'commission_action' ) );
+		add_action( 'admin_post_refm_record', array( __CLASS__, 'record_action' ) );
+		add_action( 'admin_post_refm_clear_trash', array( __CLASS__, 'clear_trash_action' ) );
+		add_action( 'wp_ajax_refm_clear_trash', array( __CLASS__, 'clear_trash_ajax' ) );
 		add_action( 'admin_post_refm_affiliate', array( __CLASS__, 'affiliate_action' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( REFM_FILE ), function ( $links ) {
 			array_unshift( $links, '<a href="' . esc_url( admin_url( 'admin.php?page=refmora&tab=settings' ) ) . '">' . esc_html__( 'Settings', 'refmora' ) . '</a>' );
@@ -72,6 +88,217 @@ final class REFM_Admin {
 		$url = add_query_arg( array( 'page' => 'refmora', 'tab' => 'payouts', 'refm_message' => is_wp_error( $result ) ? $result->get_error_message() : __( 'Withdrawal updated.', 'refmora' ), 'refm_error' => is_wp_error( $result ) ? 1 : 0 ), admin_url( 'admin.php' ) );
 		wp_safe_redirect( $url ); exit;
 	}
+	/** Process a nonce-protected manager decision, never a GET request. */
+	public static function commission_action() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Read the scalar ID solely to select its nonce; admin_request() verifies capability, POST and that nonce before any mutation.
+		$id = absint( REFM_Security::value( $_POST, 'commission_id' ) );
+		REFM_Security::admin_request( 'refm_commission_' . $id );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- admin_request() above verified POST, manage_woocommerce and this commission's nonce.
+		$decision = sanitize_key( wp_unslash( REFM_Security::value( $_POST, 'decision' ) ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- admin_request() above verified POST, manage_woocommerce and this commission's nonce.
+		$version = sanitize_text_field( wp_unslash( REFM_Security::value( $_POST, 'review_version' ) ) );
+		$result  = REFM_Commissions::review( $id, $decision, $version );
+		$message = is_wp_error( $result ) ? $result->get_error_message() : ( 'confirmed' === $decision ? __( 'Commission confirmed. Earnings are now available for withdrawal.', 'refmora' ) : __( 'Commission rejected.', 'refmora' ) );
+		$url     = add_query_arg(
+			array(
+				'page'         => 'refmora',
+				'tab'          => 'commissions',
+				'refm_error'   => is_wp_error( $result ) ? 1 : 0,
+				'refm_message' => $message,
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	/** Handle administrator record removal with a type-, ID- and operation-specific nonce. */
+	public static function record_action() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Read only scalar routing values to choose the nonce checked immediately below, before any mutation.
+		$type = sanitize_key( REFM_Security::value( $_POST, 'record_type' ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Read only the scalar record ID for nonce selection.
+		$id = absint( REFM_Security::value( $_POST, 'record_id' ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Read only the scalar operation for nonce selection.
+		$operation = sanitize_key( REFM_Security::value( $_POST, 'operation' ) );
+		REFM_Security::admin_request( 'refm_record_' . $type . '_' . $id . '_' . $operation );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- admin_request() verified POST, manage_woocommerce and the record-specific nonce above.
+		$version = sanitize_text_field( wp_unslash( REFM_Security::value( $_POST, 'record_version' ) ) );
+		if ( 'affiliates' === $type && 'delete' === $operation ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- The record-specific nonce and POST capability guard have already passed.
+			$confirmation = sanitize_text_field( wp_unslash( REFM_Security::value( $_POST, 'confirmation' ) ) );
+			$result = REFM_Records::delete_affiliate( $id, $confirmation, $version );
+		} else {
+			$result = REFM_Records::change( $type, $id, $operation, $version );
+		}
+		$url = add_query_arg(
+			array(
+				'page'         => 'refmora',
+				'tab'          => in_array( $type, array( 'affiliates', 'commissions', 'payouts' ), true ) ? $type : 'affiliates',
+				'view'         => 'affiliates' !== $type && in_array( $operation, array( 'restore', 'delete' ), true ) ? 'trash' : '',
+				'refm_error'   => is_wp_error( $result ) ? 1 : 0,
+				'refm_message' => is_wp_error( $result ) ? $result->get_error_message() : $result,
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	/** @return string Nonce-verified record type for a Clear All Trash request. */
+	private static function clear_trash_request() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- This scalar chooses the type-specific nonce verified immediately below, before clearing any record.
+		$type = sanitize_key( REFM_Security::value( $_POST, 'record_type' ) );
+		REFM_Security::admin_request( 'refm_clear_trash_' . $type );
+		return $type;
+	}
+
+	/** Process one bounded batch so a large Trash does not require one long request. */
+	public static function clear_trash_ajax() {
+		$type = self::clear_trash_request();
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- clear_trash_request() verified POST, capability and the type-specific nonce above.
+		$cursor = absint( REFM_Security::value( $_POST, 'cursor', '0' ) );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- clear_trash_request() verified POST, capability and the type-specific nonce above.
+		$ceiling = REFM_Security::value( $_POST, 'ceiling' );
+		$result  = REFM_Records::clear_trash( $type, $cursor, '' === $ceiling ? null : absint( $ceiling ) );
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), 'access' === $result->get_error_code() ? 403 : 400 );
+		}
+		wp_send_json_success( $result );
+	}
+
+	/** Clear ordinary-sized Trash without JavaScript, reporting any partial result. */
+	public static function clear_trash_action() {
+		$type    = self::clear_trash_request();
+		$cursor  = 0;
+		$ceiling = null;
+		$deleted = 0;
+		$skipped = 0;
+		$done    = false;
+		$error   = '';
+		$started = microtime( true );
+		do {
+			$result = REFM_Records::clear_trash( $type, $cursor, $ceiling );
+			if ( is_wp_error( $result ) ) {
+				$error = $result->get_error_message();
+				break;
+			}
+			$deleted += $result['deleted'];
+			$skipped += $result['skipped'];
+			$cursor   = $result['cursor'];
+			$ceiling  = $result['ceiling'];
+			$done     = $result['done'];
+			if ( '' === $error && '' !== $result['first_error'] ) {
+				$error = $result['first_error'];
+			}
+		} while ( ! $done && microtime( true ) - $started < 10 );
+		/* translators: %d: number of permanently deleted records. */
+		$message = sprintf( _n( '%d item permanently deleted.', '%d items permanently deleted.', $deleted, 'refmora' ), $deleted );
+		if ( $skipped || ! $done || $error ) {
+			$message .= ' ' . ( $error ?: __( 'Some items were not deleted. Resolve any related withdrawals and run Clear All Trash again.', 'refmora' ) );
+		}
+		$url = add_query_arg(
+			array(
+				'page'         => 'refmora',
+				'tab'          => in_array( $type, array( 'commissions', 'payouts' ), true ) ? $type : 'commissions',
+				'view'         => 'trash',
+				'refm_error'   => $skipped || ! $done || $error ? 1 : 0,
+				'refm_message' => $message,
+			),
+			admin_url( 'admin.php' )
+		);
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	/** @return bool Whether an administrator requested the reversible Trash view. */
+	public static function trash_view() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only list routing; deletion and restoration require separate POST actions and nonces.
+		return REFM_Records::allowed() && 'trash' === REFM_Security::value( $_GET, 'view' );
+	}
+
+	/**
+	 * Render deletion or restoration for the exact record displayed.
+	 *
+	 * @param string     $type Record type.
+	 * @param object|int $row  Financial row or affiliate user ID.
+	 */
+	public static function record_actions( $type, $row ) {
+		if ( ! REFM_Records::allowed() ) {
+			return;
+		}
+		$affiliate = 'affiliates' === $type;
+		if ( ! $affiliate && ( 'processing' === $row->status || ( 'commissions' === $type && $row->payout_id ) ) ) {
+			echo '<span class="refm-muted">' . esc_html__( 'Resolve withdrawal first', 'refmora' ) . '</span>';
+			return;
+		}
+		$id         = $affiliate ? absint( $row ) : absint( $row->id );
+		$operations = $affiliate ? array( 'delete' ) : ( empty( $row->trashed_at ) ? array( 'trash' ) : array( 'restore', 'delete' ) );
+		$version    = $affiliate ? REFM_Records::affiliate_version( $id ) : REFM_Records::version( $row );
+		if ( $affiliate ) {
+			echo '<details class="refm-delete-record"><summary>' . esc_html__( 'Delete', 'refmora' ) . '</summary><p class="refm-muted">' . esc_html__( 'Permanently delete this affiliate profile, commissions, withdrawals, referred-customer associations and click history. Their WordPress account and WooCommerce orders remain. This cannot be undone.', 'refmora' ) . '</p>';
+		} else {
+			echo '<div class="refm-record-actions">';
+		}
+		foreach ( $operations as $operation ) {
+			echo '<form class="refm-record-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_record"><input type="hidden" name="record_type" value="' . esc_attr( $type ) . '"><input type="hidden" name="record_id" value="' . $id . '"><input type="hidden" name="operation" value="' . esc_attr( $operation ) . '"><input type="hidden" name="record_version" value="' . esc_attr( $version ) . '">';
+			wp_nonce_field( 'refm_record_' . $type . '_' . $id . '_' . $operation );
+			if ( $affiliate ) {
+				echo '<label for="refm-delete-affiliate-' . $id . '">' . esc_html__( 'Type DELETE to confirm', 'refmora' ) . '</label><input id="refm-delete-affiliate-' . $id . '" name="confirmation" type="text" pattern="DELETE" maxlength="6" required autocomplete="off">';
+			}
+			$confirm = 'payouts' === $type ? __( 'Move this withdrawal to Trash? Pending or approved requests will be cancelled and reserved funds released. Restore will not reopen a cancelled request.', 'refmora' ) : __( 'Move this commission to Trash? Unpaid earnings will be removed until restored. Paid history and refund adjustments are preserved.', 'refmora' );
+			if ( 'delete' === $operation && ! $affiliate ) {
+				$confirm = __( 'Permanently delete this record? This cannot be undone. Removing commission history may change financial totals.', 'refmora' );
+			}
+			$delete_link  = ! $affiliate && in_array( $operation, array( 'trash', 'delete' ), true );
+			$button_class = 'restore' === $operation ? 'refm-restore-link' : ( $delete_link ? 'refm-delete-link' : 'button refm-primary refm-danger' );
+			echo '<button type="submit" class="' . esc_attr( $button_class ) . '"' . ( $delete_link ? ' data-refm-confirm="' . esc_attr( $confirm ) . '"' : '' ) . ( $delete_link && 'delete' === $operation ? ' aria-label="' . esc_attr__( 'Delete permanently', 'refmora' ) . '" title="' . esc_attr__( 'Delete permanently', 'refmora' ) . '"' : '' ) . '>';
+			if ( $delete_link || 'restore' === $operation ) {
+				echo wp_kses( REFM_UI::icon( 'restore' === $operation ? 'restore' : 'trash' ), REFM_UI::allowed_html() );
+			}
+			echo esc_html( $affiliate ? __( 'Delete permanently', 'refmora' ) : ( 'restore' === $operation ? __( 'Restore', 'refmora' ) : __( 'Delete', 'refmora' ) ) ) . '</button></form>';
+		}
+		if ( $affiliate ) {
+			echo '</details>';
+		} else {
+			echo '</div>';
+		}
+	}
+
+	/**
+	 * Render record views with their full, unfiltered item totals.
+	 *
+	 * @param string $type  Financial record type.
+	 * @param bool   $trash Whether Trash is selected.
+	 */
+	public static function record_views( $type, $trash ) {
+		if ( ! REFM_Records::allowed() ) {
+			return;
+		}
+		$counts = REFM_Records::counts( $type );
+		$views  = array(
+			''      => __( 'Records', 'refmora' ),
+			'trash' => __( 'Trash', 'refmora' ),
+		);
+		echo '<div class="refm-record-view-bar">';
+		echo '<nav class="refm-record-views" aria-label="' . esc_attr__( 'Record views', 'refmora' ) . '">';
+		foreach ( $views as $view => $label ) {
+			$selected = ( 'trash' === $view ) === (bool) $trash;
+			$count    = $counts[ 'trash' === $view ? 'trash' : 'records' ];
+			echo '<a class="refm-record-view' . ( $selected ? ' is-active' : '' ) . '" href="' . esc_url( add_query_arg( array( 'page' => 'refmora', 'tab' => $type, 'view' => $view ), admin_url( 'admin.php' ) ) ) . '"' . ( $selected ? ' aria-current="page"' : '' ) . '>';
+			echo wp_kses( REFM_UI::icon( 'trash' === $view ? 'trash' : 'commissions' ), REFM_UI::allowed_html() );
+			echo '<span>' . esc_html( $label ) . '</span> <span class="refm-record-view-count">' . esc_html( number_format_i18n( $count ) ) . '</span></a>';
+		}
+		echo '</nav>';
+		if ( $trash ) {
+			$return_url = add_query_arg( array( 'page' => 'refmora', 'tab' => $type, 'view' => 'trash' ), admin_url( 'admin.php' ) );
+			$confirm = __( 'Permanently delete every item in this Trash, across all pages and filters? This cannot be undone and may change financial totals.', 'refmora' );
+			echo '<form class="refm-clear-trash-form" data-refm-empty-trash data-refm-return-url="' . esc_url( $return_url ) . '" data-refm-confirm="' . esc_attr( $confirm ) . '" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_clear_trash"><input type="hidden" name="record_type" value="' . esc_attr( $type ) . '">';
+			wp_nonce_field( 'refm_clear_trash_' . $type );
+			echo '<button type="submit" class="button refm-clear-trash"' . disabled( 0 === $counts['trash'], true, false ) . '>' . wp_kses( REFM_UI::icon( 'trash' ), REFM_UI::allowed_html() ) . '<span data-refm-clear-label>' . esc_html__( 'Clear All Trash', 'refmora' ) . '</span></button><span class="refm-clear-trash-status screen-reader-text" role="status" aria-live="polite" data-refm-clear-status></span></form>';
+		}
+		echo '</div>';
+	}
+
 	public static function affiliate_action() {
 		if ( ! current_user_can( 'manage_woocommerce' ) ) { wp_die( esc_html__( 'Access denied.', 'refmora' ), 403 ); }
 		if ( 'POST' !== ( isset( $_SERVER['REQUEST_METHOD'] ) && is_string( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '' ) ) { wp_die( esc_html__( 'Use the settings form to make changes.', 'refmora' ), '', array( 'response' => 405 ) ); }
@@ -99,10 +326,12 @@ final class REFM_Admin {
 		if ( ! isset( $tabs[ $tab ] ) ) { $tab = 'overview'; }
 		$active = REFM_Settings::program_enabled();
 		$range = 'overview' === $tab ? REFM_Reports::requested_range() : array();
-		echo '<div class="wrap refm refm-admin"><a class="screen-reader-text" href="#refm-main">' . esc_html__( 'Skip to panel content', 'refmora' ) . '</a><header class="refm-admin-header"><div class="refm-brand"><span class="refm-brand-icon" aria-hidden="true"><img src="' . esc_url( REFM_URL . 'assets/img/icon.png' ) . '" alt="" width="44" height="44"></span><div><span class="refm-eyebrow">WP METHODS</span><h1>Refmora<span class="refm-version">' . esc_html( REFM_VERSION ) . '</span> <span class="refm-tier-badge">' . esc_html( class_exists( 'REFM_Pro_License', false ) ? __( 'Pro', 'refmora' ) : __( 'Free', 'refmora' ) ) . '</span></h1></div></div><div class="refm-header-actions"><span class="refm-program-state ' . ( $active ? 'is-active' : '' ) . '"><span aria-hidden="true"></span>' . esc_html( $active ? __( 'Program active', 'refmora' ) : __( 'Program paused', 'refmora' ) ) . '</span><a class="button refm-primary" href="' . esc_url( wc_get_account_endpoint_url( 'refmora' ) ) . '">' . esc_html__( 'Affiliate Area', 'refmora' ) . wp_kses( REFM_UI::icon( 'arrow' ), REFM_UI::allowed_html() ) . '</a></div></header><div class="refm-admin-layout"><aside class="refm-sidebar"><p class="refm-eyebrow">' . esc_html__( 'PROGRAM MANAGEMENT', 'refmora' ) . '</p><nav class="refm-tabs" aria-label="' . esc_attr__( 'Affiliate administration', 'refmora' ) . '">';
+		echo '<div class="wrap refm refm-admin"><a class="screen-reader-text" href="#refm-main">' . esc_html__( 'Skip to panel content', 'refmora' ) . '</a><header class="refm-admin-header"><div class="refm-brand"><span class="refm-brand-icon" aria-hidden="true"><img src="' . esc_url( REFM_URL . 'assets/img/icon.png' ) . '" alt="" width="44" height="44"></span><div><span class="refm-eyebrow">WP METHODS</span><h1>Refmora<span class="refm-version">' . esc_html( REFM_VERSION ) . '</span> <span class="refm-tier-badge">' . esc_html( class_exists( 'REFM_Pro_License', false ) ? __( 'Pro', 'refmora' ) : __( 'Free', 'refmora' ) ) . '</span></h1></div></div><div class="refm-header-actions"><span class="refm-program-state ' . ( $active ? 'is-active' : '' ) . '"><span aria-hidden="true"></span>' . esc_html( $active ? __( 'Program active', 'refmora' ) : __( 'Program paused', 'refmora' ) ) . '</span><a class="button refm-primary" href="' . esc_url( wc_get_account_endpoint_url( 'refmora' ) ) . '">' . esc_html__( 'Affiliate Area', 'refmora' ) . wp_kses( REFM_UI::icon( 'arrow' ), REFM_UI::allowed_html() ) . '</a></div></header><div class="refm-admin-layout' . ( 'settings' === $tab ? ' refm-settings-layout' : '' ) . '"><aside class="refm-sidebar"><p class="refm-eyebrow">' . esc_html__( 'PROGRAM MANAGEMENT', 'refmora' ) . '</p><nav class="refm-tabs" aria-label="' . esc_attr__( 'Affiliate administration', 'refmora' ) . '">';
 		$pending_counts = self::pending_counts();
 		foreach ( $tabs as $key => $label ) { echo '<a class="' . ( $key === $tab ? 'is-active' : '' ) . '" href="' . esc_url( admin_url( 'admin.php?page=refmora&tab=' . $key ) ) . '"' . ( $key === $tab ? ' aria-current="page"' : '' ) . '>' . wp_kses( REFM_UI::icon( $key ), REFM_UI::allowed_html() ) . '<span>' . esc_html( $label ) . '</span>' . wp_kses_post( self::pending_badge( $pending_counts[ $key ] ?? 0 ) ) . '</a>'; }
-		echo '</nav><div class="refm-sidebar-note">' . wp_kses( REFM_UI::icon( 'shield' ), REFM_UI::allowed_html() ) . '<strong>' . esc_html__( 'Built for your store', 'refmora' ) . '</strong><p>' . esc_html__( 'Simple referrals. Clear earnings. Payouts under your control.', 'refmora' ) . '</p></div></aside><main class="refm-main" id="refm-main"><div class="refm-heading' . ( 'overview' === $tab ? ' refm-overview-title' : '' ) . '"><span class="refm-eyebrow">' . esc_html__( 'YOUR PARTNER PROGRAM', 'refmora' ) . '</span><h2>' . esc_html( $tabs[ $tab ] ) . '</h2><p>' . esc_html( $descriptions[ $tab ] ) . '</p>';
+		echo '</nav><div class="refm-sidebar-note">' . wp_kses( REFM_UI::icon( 'shield' ), REFM_UI::allowed_html() ) . '<strong>' . esc_html__( 'Built for your store', 'refmora' ) . '</strong><p>' . esc_html__( 'Simple referrals. Clear earnings. Payouts under your control.', 'refmora' ) . '</p></div>';
+		require REFM_PATH . 'templates/admin-resources.php';
+		echo '</aside><main class="refm-main" id="refm-main"><div class="refm-heading' . ( 'overview' === $tab ? ' refm-overview-title' : '' ) . '"><span class="refm-eyebrow">' . esc_html__( 'YOUR PARTNER PROGRAM', 'refmora' ) . '</span><h2>' . esc_html( $tabs[ $tab ] ) . '</h2><p>' . esc_html( $descriptions[ $tab ] ) . '</p>';
 		if ( 'overview' === $tab ) { REFM_Reports::controls( $range ); }
 		echo '</div>';
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
@@ -133,12 +362,13 @@ final class REFM_Admin {
 		echo wp_kses( REFM_UI::metric( __( 'Completed payouts', 'refmora' ), REFM_Store::money( $stats['paid'], $currency ), 'award' ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'Referral clicks', 'refmora' ), number_format_i18n( $stats['clicks'] ), 'click', '', admin_url( 'admin.php?page=refmora&tab=refer_links' ) . '#refm-refer-links' ), REFM_UI::allowed_html() );
 		echo wp_kses( REFM_UI::metric( __( 'Registered customers', 'refmora' ), number_format_i18n( $stats['customers'] ), 'user', '', admin_url( 'admin.php?page=refmora&tab=customers' ) . '#refm-customers' ), REFM_UI::allowed_html() );
-		echo '</div></div>';
-		REFM_Reports::activity_bars( $range, $stats['clicks'], REFM_Reports::converted( $range ) );
-		echo '</div><p class="refm-report-note">' . esc_html__( 'Commission summaries use creation dates and current balances, including refund adjustments. Awaiting payouts uses request dates. Latest lists below show the newest records overall.', 'refmora' ) . '</p>';
+		echo '</div></div></div><p class="refm-report-note">' . esc_html__( 'Commission summaries use creation dates and current balances, including refund adjustments. Awaiting payouts uses request dates. Latest lists below show the newest records overall.', 'refmora' ) . '</p>';
 		/** Separate add-ons can render an overview report using the same validated date range. */
 		do_action( 'refm_admin_overview_chart', $range, $currency );
+		echo '<div class="refm-overview-referrals">';
 		REFM_Refer_Links::render( null, 'overview' );
+		REFM_Reports::activity_donut( $range, $stats['clicks'], REFM_Reports::converted( $range ) );
+		echo '</div>';
 		self::overview_lists();
 		echo '<div class="refm-grid"><section class="refm-card"><h2>' . esc_html__( 'Program at a glance', 'refmora' ) . '</h2><dl class="refm-definition">';
 		$rate = 'percent' === REFM_Settings::get( 'commission_type' ) ? esc_html( REFM_Settings::get( 'commission_rate' ) ) . '%' : wp_kses_post( REFM_Store::money( REFM_Settings::get( 'commission_rate' ) ) ) . ' ' . esc_html__( 'per unit', 'refmora' );
@@ -156,11 +386,21 @@ final class REFM_Admin {
 		} else { echo wp_kses( '<input type="' . esc_attr( $type ) . '" name="refm[' . esc_attr( $key ) . ']" id="refm-' . esc_attr( $key ) . '" value="' . esc_attr( $value ) . '" ' . $attributes . '>', REFM_UI::allowed_html() ); }
 		echo '<p class="refm-muted">' . esc_html( $help ) . '</p></div>';
 	}
+	/** Render accessible status choices using the same allowlist as settings validation. */
+	public static function commission_statuses_field() {
+		$selected = REFM_Settings::clean_commission_statuses( REFM_Settings::get( 'commission_statuses' ) );
+		echo '<fieldset class="refm-commission-statuses" aria-describedby="refm-commission-statuses-help"><legend>' . esc_html__( 'Commission tracking order statuses', 'refmora' ) . '</legend><input type="hidden" name="refm[commission_statuses][]" value="completed"><div class="refm-status-options">';
+		foreach ( REFM_Settings::commission_order_statuses() as $status => $label ) {
+			echo '<label class="refm-toggle"><input type="checkbox" name="refm[commission_statuses][]" value="' . esc_attr( $status ) . '"' . checked( in_array( $status, $selected, true ), true, false ) . disabled( 'completed' === $status, true, false ) . '> ' . esc_html( $label ) . '</label>';
+		}
+		echo '</div><p id="refm-commission-statuses-help" class="refm-muted">' . esc_html__( 'Choose which order statuses show pending commissions. Completed is always included and follows the availability rule below. Unselected statuses do not create commissions; existing commissions are rejected if an order moves to an unselected status. Cancelled, Failed and Refunded always reject commissions. Changes take effect on the next order status change or commission sync; saving does not recalculate past orders.', 'refmora' ) . '</p></fieldset>';
+	}
+
 	private static function overview_lists() {
 		global $wpdb;
 		$table = REFM_Store::table( 'payouts' );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i ORDER BY id DESC LIMIT 5', $table ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 5', $table ) );
 		echo '<div class="refm-grid"><section class="refm-card" id="refm-overview-withdrawals"><div class="refm-overview-heading"><h2>' . esc_html__( 'Latest withdrawal requests', 'refmora' ) . '</h2><a class="refm-overview-link" href="' . esc_url( admin_url( 'admin.php?page=refmora&tab=payouts' ) ) . '">' . esc_html__( 'See more withdrawals', 'refmora' ) . '</a></div><div class="refm-table-scroll"><table><thead><tr><th>' . esc_html__( 'Affiliate', 'refmora' ) . '</th><th>' . esc_html__( 'Amount', 'refmora' ) . '</th><th>' . esc_html__( 'Payment method', 'refmora' ) . '</th><th>' . esc_html__( 'Status', 'refmora' ) . '</th></tr></thead><tbody>';
 		foreach ( $rows as $row ) { echo '<tr><td>' . wp_kses_post( self::identity( $row->affiliate_id ) ) . '</td><td>' . wp_kses_post( REFM_Store::money( $row->amount, $row->currency ) ) . '</td><td>' . wp_kses( REFM_UI::payment_method( $row->method ), REFM_UI::allowed_html() ) . '</td><td>' . wp_kses_post( REFM_Store::status( $row->status ) ) . '</td></tr>'; }
 		if ( ! $rows ) { echo '<tr><td colspan="4" class="refm-empty">' . esc_html__( 'No withdrawal requests yet.', 'refmora' ) . '</td></tr>'; }
@@ -187,7 +427,8 @@ final class REFM_Admin {
 		echo '</div></section><section class="refm-card" id="refm-commissions-settings"><h2>' . wp_kses( REFM_UI::icon( 'commissions' ), REFM_UI::allowed_html() ) . esc_html__( 'Commission rules', 'refmora' ) . '</h2><p class="refm-muted">' . esc_html__( 'Set your default earnings. Commissions use the WooCommerce base currency; individual products can override these rates.', 'refmora' ) . '</p><div class="refm-form-grid">';
 		self::field( 'commission_type', __( 'Commission type', 'refmora' ), __( 'Product settings override this default.', 'refmora' ), 'select', array( 'percent' => __( 'Percentage', 'refmora' ), 'fixed' => __( 'Fixed amount per unit', 'refmora' ) ) );
 		self::field( 'commission_rate', __( 'Default commission', 'refmora' ), __( 'Percentage: 0–100. Fixed: amount per purchased unit, capped at the item total.', 'refmora' ), 'number', array(), 'min="0" max="1000000" step="0.000001" required' );
-		self::field( 'release_mode', __( 'Commission availability', 'refmora' ), __( 'By default, commissions become available as soon as the order is Completed. Optionally hold them for a number of days after completion. Refunds and cancellations still adjust commissions. Changes apply when an order first completes; previously released commissions stay available.', 'refmora' ), 'select', array( 'completed' => __( 'Immediately after order completion (default)', 'refmora' ), 'delay' => __( 'After a waiting period', 'refmora' ) ) );
+		self::commission_statuses_field();
+		self::field( 'release_mode', __( 'Commission availability', 'refmora' ), __( 'By default, commissions become available when the order is Completed. Choose a waiting period, or Confirm from Commission List to keep pending commissions on hold until a manager confirms or rejects them. Manual confirmation can release a commission in any selected tracking status. Previously released commissions stay available; refunds and cancellations still adjust earnings.', 'refmora' ), 'select', array( 'completed' => __( 'Immediately after order completion (default)', 'refmora' ), 'delay' => __( 'After a waiting period', 'refmora' ), 'manual' => __( 'Confirm from Commission List', 'refmora' ) ) );
 		echo '<div id="refm-release-days"' . ( 'delay' === REFM_Settings::get( 'release_mode' ) ? '' : ' hidden' ) . '>';
 		self::field( 'release_days', __( 'Waiting period (days)', 'refmora' ), __( '1 to 365 days, counted from the order completion time. A saved waiting period is not changed by later settings updates.', 'refmora' ), 'number', array(), 'min="1" max="365" step="1" required' );
 		echo '</div>';
@@ -248,6 +489,9 @@ final class REFM_Admin {
 		foreach ( self::list_statuses( $tab ) as $option ) { echo '<option value="' . esc_attr( $option ) . '"' . selected( $status, $option, false ) . '>' . esc_html( 'blocked' === $option ? __( 'Blocked', 'refmora' ) : wp_strip_all_tags( REFM_Store::status( $option ) ) ) . '</option>'; }
 		echo '</select><button type="submit" class="button refm-primary">' . esc_html__( 'Search', 'refmora' ) . '</button>';
 		if ( '' !== $search || '' !== $status ) { echo '<a class="refm-filter-reset" href="' . esc_url( add_query_arg( array( 'page' => 'refmora', 'tab' => $tab ), admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'Reset', 'refmora' ) . '</a>'; }
+		if ( in_array( $tab, array( 'commissions', 'payouts' ), true ) && self::trash_view() ) {
+			echo '<input type="hidden" name="view" value="trash">';
+		}
 		echo '</form>';
 	}
 	/** Show only referral-attributed registrations to authorized store managers. */
@@ -312,7 +556,7 @@ final class REFM_Admin {
 			$earnings = $wpdb->get_results( $wpdb->prepare( "SELECT affiliate_id,COALESCE(SUM(amount),0) AS earned FROM %i WHERE currency=%s AND affiliate_id IN ($placeholders) AND status IN ('available','reserved','paid') GROUP BY affiliate_id", $args ), OBJECT_K );
 		}
 		$serial = ( $page - 1 ) * self::PAGE_SIZE;
-		echo '<section class="refm-card"><div class="refm-card-toolbar"><h2>' . esc_html__( 'Affiliates', 'refmora' ) . '</h2>'; self::filters( 'affiliates' ); echo '</div><div class="refm-table-scroll"><table><thead><tr><th scope="col">' . esc_html__( 'SL', 'refmora' ) . '</th><th>' . esc_html__( 'Affiliate', 'refmora' ) . '</th><th>' . esc_html__( 'Available balance', 'refmora' ) . '</th><th scope="col" title="' . esc_attr__( 'Released commissions after refund adjustments; excludes pending and rejected commissions.', 'refmora' ) . '">' . esc_html__( 'Total earned', 'refmora' ) . '</th><th>' . esc_html__( 'Clicks', 'refmora' ) . '</th><th>' . esc_html__( 'Registered customers', 'refmora' ) . '</th><th>' . esc_html__( 'Account', 'refmora' ) . '</th><th>' . esc_html__( 'Action', 'refmora' ) . '</th></tr></thead><tbody>';
+		echo '<section class="refm-card"><div class="refm-card-toolbar"><h2>' . esc_html__( 'Affiliates', 'refmora' ) . '</h2>'; self::filters( 'affiliates' ); echo '</div><div class="refm-table-scroll"><table><thead><tr><th scope="col">' . esc_html__( 'SL', 'refmora' ) . '</th><th>' . esc_html__( 'Affiliate', 'refmora' ) . '</th><th>' . esc_html__( 'Available balance', 'refmora' ) . '</th><th scope="col" title="' . esc_attr__( 'Released commissions after refund adjustments; excludes pending and rejected commissions.', 'refmora' ) . '">' . esc_html__( 'Total earned', 'refmora' ) . '</th><th>' . esc_html__( 'Clicks', 'refmora' ) . '</th><th>' . esc_html__( 'Customers', 'refmora' ) . '</th><th>' . esc_html__( 'Account', 'refmora' ) . '</th><th>' . esc_html__( 'Action', 'refmora' ) . '</th></tr></thead><tbody>';
 		foreach ( $users as $user ) {
 			$blocked = 'yes' === get_user_meta( $user->ID, '_refm_blocked', true );
 			$stats = REFM_Store::referral_stats( $user->ID );
@@ -322,11 +566,13 @@ final class REFM_Admin {
 			$actions = 'pending' === $approval ? array( 'approved' => __( 'Approve', 'refmora' ), 'rejected' => __( 'Reject', 'refmora' ) ) : ( 'rejected' === $approval ? array( 'approved' => __( 'Approve', 'refmora' ) ) : array( $blocked ? 'unblock' : 'block' => $blocked ? __( 'Unblock', 'refmora' ) : __( 'Block', 'refmora' ) ) );
 			echo '<form class="refm-actions refm-affiliate-actions" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_affiliate"><input type="hidden" name="affiliate_id" value="' . absint( $user->ID ) . '">'; wp_nonce_field( 'refm_affiliate_' . $user->ID );
 			foreach ( $actions as $operation => $label ) {
-				$icon = 'approved' === $operation ? 'check' : ( 'rejected' === $operation ? 'close' : ( 'block' === $operation ? 'lock' : 'shield' ) );
-				$icon_only = in_array( $operation, array( 'approved', 'rejected' ), true );
-				echo '<button type="submit" class="button refm-primary' . ( 'rejected' === $operation ? ' refm-danger' : '' ) . ( $icon_only ? ' refm-icon-action' : '' ) . '" name="operation" value="' . esc_attr( $operation ) . '" aria-label="' . esc_attr( $label ) . '" title="' . esc_attr( $label ) . '">' . wp_kses( REFM_UI::icon( $icon ), REFM_UI::allowed_html() ) . ( $icon_only ? '' : esc_html( $label ) ) . '</button>';
+				$icon = 'approved' === $operation ? 'check-circle' : ( 'rejected' === $operation ? 'close' : ( 'block' === $operation ? 'lock' : 'shield' ) );
+
+				echo '<button type="submit" class="button refm-primary' . ( 'rejected' === $operation ? ' refm-danger' : '' ) . '" name="operation" value="' . esc_attr( $operation ) . '" aria-label="' . esc_attr( $label ) . '" title="' . esc_attr( $label ) . '">' . wp_kses( REFM_UI::icon( $icon ), REFM_UI::allowed_html() ) . ( 'rejected' === $operation ? '' : esc_html( $label ) ) . '</button>';
 			}
-			echo '</form></td></tr>';
+			echo '</form>';
+			self::record_actions( 'affiliates', $user->ID );
+			echo '</td></tr>';
 		}
 		if ( ! $query->get_results() ) { echo '<tr><td colspan="8" class="refm-empty">' . esc_html( '' !== $search || '' !== $status ? __( 'No affiliates match your search or filters.', 'refmora' ) : __( 'Customers who join the program will appear here.', 'refmora' ) ) . '</td></tr>'; }
 		echo '</tbody></table></div>'; self::pagination( $count, esc_html( $page ), 'affiliates', $status ); echo '</section>';
@@ -340,8 +586,31 @@ final class REFM_Admin {
 		if ( ! empty( $application['promotion'] ) ) { echo '<p><strong>' . esc_html__( 'Promotion plan', 'refmora' ) . '</strong><br>' . nl2br( esc_html( REFM_Security::value( $application, 'promotion' ) ) ) . '</p>'; }
 		echo '</details>';
 	}
+	/**
+	 * Render actions only for unsettled commissions awaiting a manager decision.
+	 *
+	 * @param object        $row   Commission record.
+	 * @param WC_Order|null $order Current WooCommerce order.
+	 */
+	public static function commission_actions( $row, $order ) {
+		if ( REFM_Commissions::can_review( $row, $order ) ) {
+			echo '<form class="refm-commission-actions refm-actions" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="refm_commission"><input type="hidden" name="commission_id" value="' . absint( $row->id ) . '"><input type="hidden" name="review_version" value="' . esc_attr( REFM_Commissions::review_version( $row ) ) . '">';
+			wp_nonce_field( 'refm_commission_' . $row->id );
+			echo '<button type="submit" class="button refm-primary" name="decision" value="confirmed">' . esc_html__( 'Confirm', 'refmora' ) . '</button><button type="submit" class="button refm-primary refm-danger" name="decision" value="rejected">' . esc_html__( 'Reject', 'refmora' ) . '</button></form>';
+			return;
+		}
+		$decision = $row->review_status ?? '';
+		if ( in_array( $decision, array( 'confirmed', 'rejected' ), true ) ) {
+			echo '<span class="refm-muted">' . esc_html( 'confirmed' === $decision ? __( 'Confirmed', 'refmora' ) : __( 'Rejected', 'refmora' ) ) . '</span>';
+		}
+	}
+
 	private static function records( $type ) {
 		global $wpdb;
+		$manual_review = 'commissions' === $type && 'manual' === REFM_Settings::get( 'release_mode' );
+		$record_actions = REFM_Records::allowed();
+		$action_column = $manual_review || $record_actions;
+		$trash = (int) self::trash_view();
 		$table = REFM_Store::table( $type );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only, sanitized account/admin routing, search, pagination or feedback; no record mutation.
 		$page = REFM_Security::page_number( absint( ( isset( $_GET[ 'paged' ] ) && is_scalar( $_GET[ 'paged' ] ) ? wp_unslash( $_GET[ 'paged' ] ) : '1' ) ) );
@@ -353,18 +622,28 @@ final class REFM_Admin {
 		$order_column = 'commissions' === $type ? 'order_id' : 'id';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
 		$count = (int) $wpdb->get_var( $wpdb->prepare(
-			'SELECT COUNT(*) FROM %i r LEFT JOIN %i u ON u.ID=r.affiliate_id WHERE (%s=\'\' OR r.status=%s) AND (%s=\'\' OR u.user_login LIKE %s OR u.user_email LIKE %s OR u.display_name LIKE %s OR (%d=1 AND (r.id=%d OR r.affiliate_id=%d OR r.%i=%d)))',
-			$table, $wpdb->users, $status, $status, $search, $like, $like, $like, (int) $numeric, $number, $number, $order_column, $number
+			'SELECT COUNT(*) FROM %i r LEFT JOIN %i u ON u.ID=r.affiliate_id WHERE (%s=\'\' OR r.status=%s) AND ((%d=1 AND r.trashed_at IS NOT NULL) OR (%d=0 AND r.trashed_at IS NULL)) AND (%s=\'\' OR u.user_login LIKE %s OR u.user_email LIKE %s OR u.display_name LIKE %s OR (%d=1 AND (r.id=%d OR r.affiliate_id=%d OR r.%i=%d)))',
+			$table, $wpdb->users, $status, $status, $trash, $trash, $search, $like, $like, $like, (int) $numeric, $number, $number, $order_column, $number
 		) );
 		$page = min( $page, max( 1, (int) ceil( $count / self::PAGE_SIZE ) ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom affiliate tables have no WordPress CRUD API; read current totals, history and privacy records without stale cross-request caches.
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			'SELECT r.* FROM %i r LEFT JOIN %i u ON u.ID=r.affiliate_id WHERE (%s=\'\' OR r.status=%s) AND (%s=\'\' OR u.user_login LIKE %s OR u.user_email LIKE %s OR u.display_name LIKE %s OR (%d=1 AND (r.id=%d OR r.affiliate_id=%d OR r.%i=%d))) ORDER BY r.id DESC LIMIT %d OFFSET %d',
-			$table, $wpdb->users, $status, $status, $search, $like, $like, $like, (int) $numeric, $number, $number, $order_column, $number, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE
+			'SELECT r.* FROM %i r LEFT JOIN %i u ON u.ID=r.affiliate_id WHERE (%s=\'\' OR r.status=%s) AND ((%d=1 AND r.trashed_at IS NOT NULL) OR (%d=0 AND r.trashed_at IS NULL)) AND (%s=\'\' OR u.user_login LIKE %s OR u.user_email LIKE %s OR u.display_name LIKE %s OR (%d=1 AND (r.id=%d OR r.affiliate_id=%d OR r.%i=%d))) ORDER BY r.id DESC LIMIT %d OFFSET %d',
+			$table, $wpdb->users, $status, $status, $trash, $trash, $search, $like, $like, $like, (int) $numeric, $number, $number, $order_column, $number, self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE
 		) );
 		echo '<section class="refm-card"><div class="refm-card-toolbar"><h2>' . esc_html( 'payouts' === $type ? __( 'Withdrawal requests', 'refmora' ) : __( 'Commission ledger', 'refmora' ) ) . '</h2>'; self::filters( $type ); echo '</div>';
+		if ( $record_actions ) {
+			self::record_views( $type, $trash );
+			if ( $trash ) {
+				echo '<p class="refm-muted">' . esc_html__( 'Restore returns history to Records using the current rules. Delete permanently removes the record and cannot be undone. Cancelled withdrawals stay cancelled when restored.', 'refmora' ) . '</p>';
+			}
+		}
 		if ( 'payouts' === $type ) { echo '<p class="refm-muted">' . esc_html__( 'Approve each request first. For manual methods, send money outside the plugin and choose Mark paid. For PayPal or Stripe, choose Send payment; completion requires provider confirmation. Sandbox/Test does not settle real earnings. Notes are visible to the affiliate.', 'refmora' ) . '</p>'; }
-		echo '<div class="refm-table-scroll"><table' . ( 'payouts' === $type ? ' class="refm-withdrawal-table"' : '' ) . '><thead><tr><th>#</th><th>' . esc_html( 'payouts' === $type ? __( 'Affiliate', 'refmora' ) : __( 'Affiliate', 'refmora' ) ) . '</th><th>' . esc_html__( 'Amount', 'refmora' ) . '</th><th>' . esc_html__( 'Status', 'refmora' ) . '</th><th>' . esc_html__( 'Date', 'refmora' ) . '</th><th>' . esc_html( 'payouts' === $type ? __( 'Payment & action', 'refmora' ) : __( 'Order / paid', 'refmora' ) ) . '</th></tr></thead><tbody>';
+		echo '<div class="refm-table-scroll"><table' . ( 'payouts' === $type ? ' class="refm-withdrawal-table"' : '' ) . '><thead><tr><th>#</th><th>' . esc_html( 'payouts' === $type ? __( 'Affiliate', 'refmora' ) : __( 'Affiliate', 'refmora' ) ) . '</th><th>' . esc_html__( 'Amount', 'refmora' ) . '</th><th>' . esc_html__( 'Status', 'refmora' ) . '</th><th>' . esc_html__( 'Date', 'refmora' ) . '</th><th>' . esc_html( 'payouts' === $type ? __( 'Payment & action', 'refmora' ) : __( 'Order / paid', 'refmora' ) ) . '</th>';
+		if ( $action_column ) {
+			echo '<th scope="col">' . esc_html__( 'Action', 'refmora' ) . '</th>';
+		}
+		echo '</tr></thead><tbody>';
 		foreach ( $rows as $row ) {
 			echo '<tr><td>' . absint( $row->id ) . '</td><td' . ( 'payouts' === $type ? ' class="refm-withdrawal-customer"' : '' ) . '>' . wp_kses_post( self::identity( $row->affiliate_id ) );
 			echo '</td><td>' . wp_kses_post( REFM_Store::money( $row->amount, $row->currency ) ) . '</td><td>' . wp_kses_post( REFM_Store::status( $row->status ) ) . '</td><td>' . esc_html( get_date_from_gmt( $row->created_at, get_option( 'date_format' ) ) ) . '</td><td' . ( 'payouts' === $type ? ' class="refm-withdrawal-review"' : '' ) . '>';
@@ -391,16 +670,27 @@ final class REFM_Admin {
 				} else { echo '<div class="refm-admin-note-readonly"><span class="refm-admin-note-label">' . wp_kses( REFM_UI::icon( 'note' ), REFM_UI::allowed_html() ) . esc_html__( 'Admin note', 'refmora' ) . '</span><p>' . ( $row->note ? nl2br( esc_html( $row->note ) ) : esc_html__( 'No admin note.', 'refmora' ) ) . '</p></div>'; }
 				echo '</details>';
 			}
-			echo '</td></tr>';
+			echo '</td>';
+			if ( $action_column ) {
+				echo '<td>';
+				if ( $manual_review && ! $trash ) {
+					self::commission_actions( $row, $order );
+				}
+				if ( $record_actions ) {
+					self::record_actions( $type, $row );
+				}
+				echo '</td>';
+			}
+			echo '</tr>';
 		}
-		if ( ! $rows ) { echo '<tr><td colspan="6" class="refm-empty">' . esc_html__( 'No records found.', 'refmora' ) . '</td></tr>'; }
+		if ( ! $rows ) { echo '<tr><td colspan="' . ( $action_column ? '7' : '6' ) . '" class="refm-empty">' . esc_html__( 'No records found.', 'refmora' ) . '</td></tr>'; }
 		echo '</tbody></table></div>'; self::pagination( $count, esc_html( $page ), $type, $status ); echo '</section>';
 	}
 	private static function pagination( $count, $page, $tab, $status = '' ) {
 		$total = (int) ceil( $count / self::PAGE_SIZE );
 		if ( $total <= 1 ) { return; }
 		$page = min( max( 1, $page ), $total );
-		$base = add_query_arg( array( 'page' => 'refmora', 'tab' => $tab, 'status' => $status, 'q' => self::search_term(), 'paged' => 999999999 ), admin_url( 'admin.php' ) );
+		$base = add_query_arg( array( 'page' => 'refmora', 'tab' => $tab, 'view' => self::trash_view() ? 'trash' : '', 'status' => $status, 'q' => self::search_term(), 'paged' => 999999999 ), admin_url( 'admin.php' ) );
 		$clean_url = function ( $url ) { return remove_query_arg( array( 'saved', 'refm_message', 'refm_error' ), $url ); };
 		add_filter( 'get_pagenum_link', $clean_url );
 		try { $links = paginate_links( array( 'base' => str_replace( '999999999', '%#%', $base ), 'format' => '', 'current' => $page, 'total' => $total, 'type' => 'array', 'add_args' => false, 'mid_size' => 1, 'end_size' => 1, 'prev_text' => __( 'Previous', 'refmora' ), 'next_text' => __( 'Next', 'refmora' ) ) ); } finally { remove_filter( 'get_pagenum_link', $clean_url ); }

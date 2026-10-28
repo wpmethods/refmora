@@ -12,3 +12,7 @@
 @media(max-width:1100px){.refm .refm-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.refm .refm-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.refm-admin{margin:14px 10px 0 0}.refm .refm-card{padding:18px}.refm .refm-metric{padding:16px}.refm .refm-metric>strong{font-size:22px}.refm .refm-form-grid{grid-template-columns:1fr}.refm .refm-method-top{flex-wrap:wrap}.refm .refm-method-top>label:first-child{flex-basis:100%}.refm .refm-section-heading{align-items:start;flex-direction:column}.refm .refm-tabs a{padding:10px 12px}.refm .refm-heading h1,.refm .refm-heading h2{font-size:25px}}
 .refm .refm-channel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}.refm .refm-channel{display:flex;align-items:center;gap:10px;padding:16px;border:1px solid var(--refm-border);border-radius:8px;background:var(--refm-surface,#fff);font-weight:600}.refm .refm-channel svg{color:var(--refm-accent)}.refm .refm-channel input{margin:0}.refm .refm-settings>.refm-card>h2{padding-bottom:12px;border-bottom:1px solid var(--refm-border)}
+.refm .refm-commission-statuses{grid-column:1/-1;min-width:0;margin:0 0 14px;padding:0;border:0}
+.refm .refm-commission-statuses legend{padding:0;font-weight:600;margin-bottom:10px}
+.refm .refm-status-options{display:flex;flex-wrap:wrap;gap:12px 24px}
+.refm .refm-commission-statuses p{margin:10px 0 0}

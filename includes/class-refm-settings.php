@@ -2,6 +2,43 @@
 defined( 'ABSPATH' ) || exit;
 
 final class REFM_Settings {
+	/**
+	 * Registered order statuses that can earn commission.
+	 *
+	 * @return array Status slugs without the wc- prefix and their display labels.
+	 */
+	public static function commission_order_statuses() {
+		$statuses = array();
+		$excluded = array( 'cancelled', 'failed', 'refunded', 'trash', 'incomplete', 'checkout-draft', 'auto-draft' );
+		if ( function_exists( 'wc_get_order_statuses' ) ) {
+			foreach ( wc_get_order_statuses() as $key => $label ) {
+				$status = 0 === strpos( $key, 'wc-' ) ? substr( $key, 3 ) : $key;
+				if ( ! in_array( $status, $excluded, true ) ) {
+					$statuses[ $status ] = $label;
+				}
+			}
+		}
+		$statuses['completed'] = __( 'Completed', 'refmora' );
+		return $statuses;
+	}
+
+	/**
+	 * Validate the status list against WooCommerce, always retaining completion.
+	 *
+	 * @param mixed $statuses Submitted or saved status list.
+	 * @return string[] Allowed order status slugs.
+	 */
+	public static function clean_commission_statuses( $statuses ) {
+		$allowed = self::commission_order_statuses();
+		$clean   = array( 'completed' );
+		foreach ( is_array( $statuses ) ? $statuses : array() as $status ) {
+			if ( is_string( $status ) && isset( $allowed[ $status ] ) && ! in_array( $status, $clean, true ) ) {
+				$clean[] = $status;
+			}
+		}
+		return $clean;
+	}
+
 	/** Store accounting currency, independent of the visitor's currency-switcher selection. */
 	public static function base_currency() {
 		$currency = get_option( 'woocommerce_currency', 'USD' );
@@ -33,7 +70,7 @@ final class REFM_Settings {
 		return '';
 	}
 	public static function defaults() {
-		return array( 'enabled' => 'yes', 'approval_required' => 'no', 'terms_content' => '', 'join_title' => __( 'Turn recommendations into rewards', 'refmora' ), 'join_description' => __( 'Join our affiliate program and earn commissions when someone buys through your personal link.', 'refmora' ), 'join_button_text' => __( 'Join affiliate program', 'refmora' ), 'join_show_rate' => 'no', 'join_url_enabled' => 'no', 'join_promotion_enabled' => 'no', 'release_mode' => 'completed', 'release_days' => 7, 'commission_type' => 'percent', 'commission_rate' => '10', 'minimum' => '50', 'currency' => self::base_currency(), 'exchange_source' => 'same', 'exchange_rates' => '', 'referral_parameter' => 'refm_ref', 'account_slug' => 'refmora', 'cookie_days' => 30, 'attribution' => 'first', 'purchase_policy' => 'multiple', 'payout_mode' => 'manual', 'method_selection' => 'multiple', 'methods' => array( array( 'id' => 'bank', 'name' => 'Bank transfer', 'instructions' => 'Enter the account holder, bank name and account details. Do not provide passwords or card details.', 'active' => 'yes' ) ) );
+		return array( 'enabled' => 'yes', 'approval_required' => 'no', 'terms_content' => '', 'join_title' => __( 'Turn recommendations into rewards', 'refmora' ), 'join_description' => __( 'Join our affiliate program and earn commissions when someone buys through your personal link.', 'refmora' ), 'join_button_text' => __( 'Join affiliate program', 'refmora' ), 'join_show_rate' => 'no', 'join_url_enabled' => 'no', 'join_promotion_enabled' => 'no', 'commission_statuses' => array_keys( self::commission_order_statuses() ), 'release_mode' => 'completed', 'release_days' => 7, 'commission_type' => 'percent', 'commission_rate' => '10', 'minimum' => '50', 'currency' => self::base_currency(), 'exchange_source' => 'same', 'exchange_rates' => '', 'referral_parameter' => 'refm_ref', 'account_slug' => 'refmora', 'cookie_days' => 30, 'attribution' => 'first', 'purchase_policy' => 'multiple', 'payout_mode' => 'manual', 'method_selection' => 'multiple', 'methods' => array( array( 'id' => 'bank', 'name' => 'Bank transfer', 'instructions' => 'Enter the account holder, bank name and account details. Do not provide passwords or card details.', 'active' => 'yes' ) ) );
 	}
 	/** Effective program state; keep the merchant's saved preference intact. */
 	public static function program_enabled() {
@@ -95,8 +132,13 @@ final class REFM_Settings {
 		}
 		$clean['join_description'] = mb_substr( sanitize_textarea_field( REFM_Security::value( $input, 'join_description', $defaults['join_description'] ) ), 0, 3000 );
 		$clean['terms_content'] = wp_kses_post( mb_substr( REFM_Security::value( $input, 'terms_content' ), 0, 50000 ) );
+
+		$clean['commission_statuses'] = self::clean_commission_statuses(
+			array_key_exists( 'commission_statuses', $input ) ? $input['commission_statuses'] : $defaults['commission_statuses']
+		);
+
 		$clean['enabled'] = 'yes' === REFM_Security::value( $input, 'enabled' ) ? 'yes' : 'no';
-		foreach ( array( 'join_url_enabled' => array( 'yes', 'no' ), 'join_promotion_enabled' => array( 'yes', 'no' ), 'join_show_rate' => array( 'yes', 'no' ), 'release_mode' => array( 'completed', 'delay' ), 'exchange_source' => array( 'auto', 'fox', 'curcy', 'manual', 'same' ), 'approval_required' => array( 'yes', 'no' ), 'commission_type' => array( 'percent', 'fixed' ), 'attribution' => array( 'first', 'last' ), 'purchase_policy' => array( 'once', 'multiple' ), 'payout_mode' => array( 'manual', 'disabled' ), 'method_selection' => array( 'single', 'multiple' ) ) as $key => $allowed ) {
+		foreach ( array( 'join_url_enabled' => array( 'yes', 'no' ), 'join_promotion_enabled' => array( 'yes', 'no' ), 'join_show_rate' => array( 'yes', 'no' ), 'release_mode' => array( 'completed', 'delay', 'manual' ), 'exchange_source' => array( 'auto', 'fox', 'curcy', 'manual', 'same' ), 'approval_required' => array( 'yes', 'no' ), 'commission_type' => array( 'percent', 'fixed' ), 'attribution' => array( 'first', 'last' ), 'purchase_policy' => array( 'once', 'multiple' ), 'payout_mode' => array( 'manual', 'disabled' ), 'method_selection' => array( 'single', 'multiple' ) ) as $key => $allowed ) {
 			$clean[ $key ] = in_array( $input[ $key ] ?? '', $allowed, true ) ? $input[ $key ] : $defaults[ $key ];
 		}
 		$clean['commission_rate'] = wc_format_decimal( max( 0, min( 1000000, (float) wc_format_decimal( REFM_Security::value( $input, 'commission_rate', '10' ) ) ) ), 6 );

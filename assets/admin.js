@@ -2,6 +2,70 @@
 (function () {
     'use strict';
     const config = window.refmAdmin || {};
+    document.addEventListener('submit', function (event) {
+        if (!event.target.closest('.refm-admin')) return;
+        const message = event.submitter?.dataset.refmConfirm || event.target.dataset.refmConfirm;
+        if (message && !window.confirm(message)) event.preventDefault();
+    });
+    document.addEventListener('submit', async function (event) {
+        const form = event.target;
+        if (!form.matches('.refm-admin [data-refm-empty-trash]') || event.defaultPrevented) return;
+        event.preventDefault();
+        const button = form.querySelector('button[type="submit"]');
+        if (form.dataset.refmBusy === 'yes' || !button || button.disabled) return;
+        const label = form.querySelector('[data-refm-clear-label]');
+        const status = form.querySelector('[data-refm-clear-status]');
+        const original = label.textContent;
+        let cursor = 0;
+        let ceiling = null;
+        let deleted = 0;
+        let skipped = 0;
+        let firstError = '';
+        form.dataset.refmBusy = 'yes';
+        button.disabled = true;
+        label.textContent = config.clearing_trash || 'Clearing Trash...';
+        status.classList.add('screen-reader-text');
+        status.textContent = label.textContent;
+        try {
+            while (true) {
+                const payload = new FormData(form);
+                payload.set('cursor', String(cursor));
+                if (ceiling !== null) payload.set('ceiling', String(ceiling));
+                const response = await fetch(window.ajaxurl, {method: 'POST', credentials: 'same-origin', body: payload});
+                const result = await response.json();
+                const data = result.data;
+                if (!response.ok || !result.success || !data || typeof data.done !== 'boolean'
+                    || !Number.isSafeInteger(data.cursor) || data.cursor < cursor
+                    || !Number.isSafeInteger(data.ceiling) || data.ceiling < 0
+                    || !Number.isSafeInteger(data.deleted) || data.deleted < 0
+                    || !Number.isSafeInteger(data.skipped) || data.skipped < 0
+                    || (!data.done && data.cursor <= cursor)
+                    || (ceiling !== null && data.ceiling !== ceiling)) throw new Error('Clearing interrupted');
+                cursor = data.cursor;
+                ceiling = data.ceiling;
+                deleted += data.deleted;
+                skipped += data.skipped;
+                if (!firstError && typeof data.first_error === 'string') firstError = data.first_error;
+                const progress = (config.trash_removed || 'Deleted: %d').replace('%d', String(deleted));
+                label.textContent = progress;
+                status.textContent = progress;
+                if (data.done) break;
+            }
+            const destination = new URL(form.dataset.refmReturnUrl, window.location.href);
+            const message = skipped
+                ? (config.clear_trash_partial || 'Some items could not be deleted.') + (firstError ? ' ' + firstError : '')
+                : (config.clear_trash_done || 'Trash cleared.');
+            destination.searchParams.set('refm_message', message);
+            destination.searchParams.set('refm_error', skipped ? '1' : '0');
+            window.location.assign(destination.href);
+        } catch (error) {
+            status.classList.remove('screen-reader-text');
+            status.textContent = config.clear_trash_error || 'Clearing could not finish. Refresh Trash before trying again.';
+            label.textContent = original;
+            button.disabled = false;
+            delete form.dataset.refmBusy;
+        }
+    });
     document.addEventListener('click', function (event) {
         const button = event.target.closest('.refm-choose-payment-icon, .refm-clear-payment-icon');
         if (!button || !button.closest('.refm-admin')) return;
@@ -140,6 +204,14 @@
     window.addEventListener('beforeunload', function (event) {
         if (dirty) { event.preventDefault(); event.returnValue = ''; }
     });
+    const resources = document.querySelector('.refm-sidebar-resources');
+    if (resources) {
+        const compactResources = window.matchMedia('(max-width: 960px)');
+        function resourceLayout() { resources.open = !compactResources.matches; }
+        if (compactResources.addEventListener) compactResources.addEventListener('change', resourceLayout);
+        else compactResources.addListener(resourceLayout);
+        resourceLayout();
+    }
     const exchange = document.getElementById('refm-exchange_source');
     const manualRates = document.getElementById('refm-manual-exchange-rates');
     const release = document.getElementById('refm-release_mode');

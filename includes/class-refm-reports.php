@@ -234,7 +234,7 @@ final class REFM_Reports {
 			return;
 		}
 		echo '<div class="refm-affiliate-activity" id="refm-affiliate-activity">';
-		self::activity_bars( array( 'compact' => true ), $totals['clicks'], $totals['converted'] );
+		self::activity_donut( array( 'compact' => true ), $totals['clicks'], $totals['converted'] );
 		echo '</div>';
 	}
 
@@ -262,46 +262,40 @@ final class REFM_Reports {
 	}
 
 	/**
-	 * Render two activity bars against the same recorded-click baseline.
+	 * Render a conversion donut against the recorded-click baseline.
 	 *
 	 * @param array $range Validated period or compact affiliate context.
 	 * @param int   $clicks Recorded clicks.
 	 * @param int   $converted Completed referred orders.
 	 */
-	public static function activity_bars( $range, $clicks, $converted ) {
+	public static function activity_donut( $range, $clicks, $converted ) {
 		$clicks    = max( 0, (int) $clicks );
 		$converted = max( 0, (int) $converted );
 		$compact   = ! empty( $range['compact'] );
 		$title_id  = $compact ? 'refm-affiliate-conversion-title' : 'refm-conversion-title';
 		$rate      = $clicks > 0 ? 100 * $converted / $clicks : 0;
 		$available = $clicks > 0 || 0 === $converted;
-		$rows      = array(
-			array(
-				'key'       => 'clicks',
-				'label'     => __( 'Total clicks', 'refmora' ),
-				'count'     => $clicks,
-				'rate'      => $clicks > 0 ? 100 : 0,
-				'available' => true,
-			),
-			array(
-				'key'       => 'converted',
-				'label'     => __( 'Converted', 'refmora' ),
-				'count'     => $converted,
-				'rate'      => $rate,
-				'available' => $available,
-			),
-		);
-		echo '<section class="refm-card refm-conversion-chart refm-activity-bars" aria-labelledby="' . esc_attr( $title_id ) . '"><h2 id="' . esc_attr( $title_id ) . '">' . esc_html__( 'Clicks & converted', 'refmora' ) . '</h2>';
+		$percent   = $available ? number_format_i18n( $rate, 2 ) . '%' : '—';
+		$share     = number_format( min( 100, $rate ), 4, '.', '' );
+		/* translators: 1: tracked click count, 2: completed referred order count, 3: conversion percentage. */
+		$description = sprintf( __( '%1$s total clicks; %2$s converted orders; conversion rate %3$s.', 'refmora' ), number_format_i18n( $clicks ), number_format_i18n( $converted ), $percent );
+		echo '<section class="refm-card refm-conversion-chart refm-activity-donut" aria-labelledby="' . esc_attr( $title_id ) . '"><h2 id="' . esc_attr( $title_id ) . '">' . esc_html__( 'Clicks & converted', 'refmora' ) . '</h2>';
 		if ( ! $compact ) {
-			echo '<p class="refm-muted">' . esc_html( $range['label'] ) . '</p>'; }
-		echo '<div class="refm-activity-bar-list">';
-		foreach ( $rows as $row ) {
-			$percent = $row['available'] ? number_format_i18n( $row['rate'], 2 ) . '%' : '—';
-			$width   = number_format( min( 100, $row['rate'] ), 4, '.', '' );
-			/* translators: 1: event count, 2: percentage of total clicks. */
-			$value_text = sprintf( __( '%1$s; %2$s of total clicks', 'refmora' ), number_format_i18n( $row['count'] ), $percent );
-			echo '<div class="refm-activity-bar-row refm-chart-series-' . esc_attr( $row['key'] ) . '"><div class="refm-activity-bar-heading"><span>' . esc_html( $row['label'] ) . '</span><span class="refm-activity-bar-values"><strong>' . esc_html( number_format_i18n( $row['count'] ) ) . '</strong><span>' . esc_html( $percent ) . '</span></span></div><div class="refm-activity-bar-track" role="progressbar" aria-label="' . esc_attr( $row['label'] ) . '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' . esc_attr( $width ) . '" aria-valuetext="' . esc_attr( $value_text ) . '"><span style="width:' . esc_attr( $width ) . '%"></span></div></div>';
+			echo '<p class="refm-muted">' . esc_html( $range['label'] ) . '</p>';
 		}
-		echo '</div></section>';
+		echo '<div class="refm-donut-layout"><div class="refm-donut-visual' . ( $clicks > 0 ? ' has-clicks' : '' ) . '" role="img" aria-label="' . esc_attr( $description ) . '"><svg viewBox="0 0 160 160" width="160" height="160" aria-hidden="true" focusable="false"><circle class="refm-donut-track" cx="80" cy="80" r="64" fill="none" stroke-width="16"></circle>';
+		if ( $clicks > 0 && $converted > 0 ) {
+			echo '<circle class="refm-donut-progress" cx="80" cy="80" r="64" fill="none" stroke-width="16" pathLength="100" stroke-dasharray="' . esc_attr( $share ) . ' 100" transform="rotate(-90 80 80)"></circle>';
+		}
+		echo '</svg><div class="refm-donut-center" aria-hidden="true"><strong>' . esc_html( $percent ) . '</strong><span>' . esc_html__( 'Conversion rate', 'refmora' ) . '</span></div></div><dl class="refm-donut-legend">';
+		foreach ( array( 'clicks' => array( __( 'Total clicks', 'refmora' ), $clicks ), 'converted' => array( __( 'Converted', 'refmora' ), $converted ) ) as $key => $row ) {
+			echo '<div class="refm-donut-stat refm-chart-series-' . esc_attr( $key ) . '"><dt><span class="refm-donut-swatch" aria-hidden="true"></span>' . esc_html( $row[0] ) . '</dt><dd>' . esc_html( number_format_i18n( $row[1] ) ) . '</dd></div>';
+		}
+		echo '</dl></div></section>';
+	}
+
+	/** Preserve the public renderer entry point for existing integrations. */
+	public static function activity_bars( $range, $clicks, $converted ) {
+		self::activity_donut( $range, $clicks, $converted );
 	}
 }

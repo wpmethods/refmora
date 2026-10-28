@@ -24,9 +24,14 @@ final class REFM_Tracking {
 		}
 		return $token;
 	}
-	public static function payload( $id, $expires ) {
+	public static function payload( $id, $expires, $epoch = null ) {
 		$data = absint( $id ) . '.' . absint( $expires );
-		return $data . '.' . hash_hmac( 'sha256', $data, REFM_Data::cookie_key() );
+		$epoch = null === $epoch ? REFM_Data::affiliate_epoch( $id ) : $epoch;
+		$key = REFM_Data::cookie_key();
+		if ( $epoch > 0 ) {
+			$key = hash_hmac( 'sha256', 'affiliate:' . absint( $id ) . ':' . $epoch, $key );
+		}
+		return $data . '.' . hash_hmac( 'sha256', $data, $key );
 	}
 	public static function referral() {
 		return REFM_Settings::program_enabled() ? self::cookie_id( self::COOKIE ) : 0;
@@ -48,13 +53,15 @@ final class REFM_Tracking {
 		// phpcs:ignore WordPress.DB.SlowDBQuery -- Exact validated token lookup returns one ID with no count; WordPress caches the query, and eligibility is checked separately.
 		$users = get_users( array( 'count_total' => false, 'cache_results' => true, 'meta_key' => '_refm_token', 'meta_value' => $token, 'number' => 1, 'fields' => 'ID' ) );
 		$id = $users ? (int) $users[0] : 0;
-		if ( ! self::active( $id ) || $id === get_current_user_id() ) { return; }
+		$epoch = REFM_Data::affiliate_epoch( $id );
+		wp_cache_delete( $id, 'user_meta' );
+		if ( $epoch < 0 || ! self::active( $id ) || $id === get_current_user_id() ) { return; }
 		// Consent integrations can veto tracking before a cookie is created.
 		if ( ! apply_filters( 'refm_tracking_allowed', true, $id ) ) { return; }
 		self::record_click( $id );
 		if ( 'first' === REFM_Settings::get( 'attribution' ) && self::referral() ) { return; }
 		$expires = time() + DAY_IN_SECONDS * REFM_Settings::get( 'cookie_days' );
-		$value = self::payload( $id, $expires );
+		$value = self::payload( $id, $expires, $epoch );
 		setcookie( self::COOKIE, $value, array( 'expires' => $expires, 'path' => '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
 		$_COOKIE[ self::COOKIE ] = $value;
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- This compatibility name is defined by WordPress/LiteSpeed and must match the external cache integration API.
@@ -72,9 +79,15 @@ final class REFM_Tracking {
 		$affiliate = $id ? get_userdata( $id ) : false;
 		if ( ! REFM_Settings::program_enabled() || ! $customer || ! $affiliate || $id === (int) $customer_id || ! array_intersect( array( 'customer', 'subscriber' ), $customer->roles ) || strtolower( $customer->user_email ) === strtolower( $affiliate->user_email ) || ! apply_filters( 'refm_tracking_allowed', true, $id ) ) { return; }
 		$table = REFM_Store::table( 'customers' );
-		// A customer can only be attributed once, even if both creation hooks fire.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Custom aggregate/referral table has no WordPress CRUD API; the statement must read or update current counters.
-		$wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (customer_id,affiliate_id,created_at) VALUES (%d,%d,%s)', $table, $customer_id, $id, current_time( 'mysql', true ) ) );
+		// Recheck the signed cookie under the deletion lock before attributing a new customer.
+		REFM_Store::locked( $id, static function () use ( $wpdb, $table, $customer_id, $id ) {
+			wp_cache_delete( $id, 'user_meta' );
+			if ( ! self::active( $id ) || self::referral() !== $id ) {
+				return new WP_Error( 'affiliate', __( 'Referral tracking is unavailable.', 'refmora' ) );
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Unique customer key prevents duplicate attribution; serialization prevents a concurrent affiliate deletion from recreating history.
+			REFM_Store::must( $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (customer_id,affiliate_id,created_at) VALUES (%d,%d,%s)', $table, $customer_id, $id, current_time( 'mysql', true ) ) ) );
+		} );
 	}
 	public static function delete_customer( $customer_id ) {
 		global $wpdb;
@@ -91,8 +104,11 @@ final class REFM_Tracking {
 		$user = $id ? get_userdata( $id ) : false;
 		if ( ! $user || $id === (int) $order->get_customer_id() || $id === get_current_user_id() || strtolower( $user->user_email ) === strtolower( $order->get_billing_email() ) ) { return; }
 		$state = REFM_Data::state();
-		if ( ! is_array( $state ) || ! empty( $state['clearing'] ) ) { return; }
+		$epoch = REFM_Data::affiliate_epoch( $id );
+		wp_cache_delete( $id, 'user_meta' );
+		if ( ! is_array( $state ) || ! empty( $state['clearing'] ) || $epoch < 0 || ! self::active( $id ) || self::referral() !== $id ) { return; }
 		$order->update_meta_data( '_refm_affiliate', $id );
+		$order->update_meta_data( '_refm_affiliate_epoch', $epoch );
 		$order->update_meta_data( '_refm_generation', (int) $state['generation'] );
 		$order->update_meta_data( '_refm_currency', REFM_Settings::get( 'currency' ) );
 		$order->update_meta_data( '_refm_purchase_policy', REFM_Settings::get( 'purchase_policy' ) );

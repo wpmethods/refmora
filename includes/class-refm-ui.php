@@ -33,6 +33,7 @@ final class REFM_UI {
 	public static function icon( $name ) {
 		$paths = array(
 			'trash' => 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
+			'restore' => 'M3 11a9 9 0 1 1 2.7 7 M3 4v7h7',
 			'image' => 'M3 3h18v18H3z M3 16l6-6 5 5 3-3 4 4 M16 7h.01',
 			'note' => 'M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5',
 			'close' => 'M6 6l12 12 M18 6L6 18',
@@ -59,6 +60,7 @@ final class REFM_UI {
 			'link' => 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',
 			'clock' => 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M12 7v5l3 2',
 			'check' => 'M5 12l4 4L19 6',
+			'check-circle' => 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z M8 12l3 3 5-6',
 			'arrow' => 'M4 12h16 M15 7l5 5-5 5',
 			'click' => 'M5 3l4 17 4-7 7-4z',
 			'shield' => 'M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6',

@@ -5,7 +5,7 @@ Requires at least: 6.5
 Tested up to: 7.1
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 Donate link: https://buymeacoffee.com/ajharrashed
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -42,6 +42,8 @@ The free plugin uses your store's base currency. All features included in the fr
 
 * Choose percentage-based or fixed-per-unit commissions.
 * Set product-specific rates and exclusions. Parent product rules also cover variations.
+* Choose which WooCommerce order statuses show pending commissions, including custom statuses. Completed orders follow your commission availability rule.
+* Optionally confirm or reject pending commissions manually from the Commissions list before earnings become available.
 * Make commissions available when an order is Completed, or set a waiting period of 1–365 days.
 * Adjust earnings when an order is refunded.
 * Reserve withdrawal amounts to help prevent the same balance from being used twice.
@@ -59,7 +61,7 @@ Manual payout methods are included in the free plugin. Automatic payments throug
 
 * View pending commissions, available earnings, awaiting payouts, completed payouts, referral clicks, and registered customers.
 * Choose Daily, Weekly, Monthly, This Year, Last Year, or Lifetime date ranges in the free Overview.
-* Compare clicks and completed referred orders using activity bars, counts, and percentages.
+* Compare clicks and completed referred orders using a donut chart, totals, and the conversion percentage.
 * Let approved affiliates view their own lifetime activity above the withdrawal card.
 * Search admin records and filter by status.
 * Browse paginated lists: generally ten records per admin page and five per affiliate data table.
@@ -85,6 +87,7 @@ Pro adds:
 * Payment sending after withdrawal approval, provider status checks, and payment reconciliation.
 * Exchange-rate conversion through FOX/WOOCS, CURCY, or manually configured currency pairs.
 * CSV exports for affiliates, commissions, withdrawals, referred customers, and daily referral clicks, with optional date ranges.
+* Same-site Database Backup & Restore for Refmora settings, profiles, links, click history, commissions, withdrawals and Trash. This signed JSON recovery feature is implemented in the separate Pro add-on.
 * An earnings and referrals history chart combining earnings, total clicks, and completed referred orders, using the Overview date filter.
 
 Automatic payments still require administrator approval and an explicit Send payment action. Provider eligibility, supported countries and currencies, available funds, and fees apply.
@@ -140,7 +143,7 @@ The free plugin does not transfer money automatically. Naming a manual method Pa
 
 = What does the Pro add-on include? =
 
-Pro adds PayPal Payouts and Stripe Connect API payments, currency conversion, CSV exports, and the earnings and referrals history chart.
+Pro adds PayPal Payouts and Stripe Connect API payments, currency conversion, CSV exports, same-site Database Backup & Restore, and the earnings and referrals history chart.
 
 These features are implemented in a separate plugin. The free download contains contextual information about the add-on, rather than premium code locked behind a license.
 
@@ -160,6 +163,26 @@ By default, commissions become available when an order is marked Completed. You 
 
 Commissions use product totals after discounts, excluding tax and shipping. Refunds adjust earnings. If a refunded commission has already been paid, the adjustment can reduce future balances.
 
+= Which order statuses create pending commissions? =
+
+Under Settings > Commission rules > Commission tracking order statuses, select the statuses that should count as pending earnings. For example, select Processing and leave Pending payment and On hold unchecked to wait until an order is being processed. Registered custom order statuses are also supported.
+
+Completed is always included and uses your commission availability and waiting-period settings. Leave only Completed selected to avoid showing pending earnings before completion. A waiting period can still make a completed commission pending until the hold expires.
+
+Orders in unselected statuses keep their referral attribution but do not create commission records. If a tracked order moves to an unselected status, its commission is rejected and removed from pending earnings. Cancelled, Failed and Refunded always reject commissions. Returning to a selected status recalculates the existing commission without creating a duplicate. Payout reservations and already-paid adjustments follow the existing reconciliation rules.
+
+Existing installations and older settings backups keep all eligible registered statuses selected by default. Saving this setting does not recalculate historical orders; it applies when an order status changes or its commission is otherwise synchronized.
+
+= Can I confirm commissions manually? =
+
+Yes. Set Commission availability to Confirm from Commission List. The Commissions tab then shows an Action column with Confirm and Reject buttons for pending, unpaid commissions in eligible order statuses. Confirm makes the commission available for withdrawal, even before order completion. Reject sets its amount to zero and keeps the rejection through later order updates and settings changes.
+
+Completed orders remain pending in this mode until a manager decides. Existing scheduled releases cannot bypass manual review. Commissions already released, reserved or paid are not sent back for review. Waiting-period fields are hidden in this mode. Other availability modes keep their normal behavior and do not show Confirm/Reject. Administrators can still use the Action column for Delete and Restore.
+
+Refunds, cancellations, excluded tracking statuses and once-per-customer restrictions still apply. Manually confirmed earnings can therefore be reduced by later order changes. A manual confirmation releases earnings; it does not pay the affiliate or change the WooCommerce order status.
+
+Only users with the manage_woocommerce capability can review commissions. Each action requires a POST request and a commission-specific nonce. The current order, commission version and eligibility are rechecked under the existing financial locks. The decision, reviewer user ID and UTC review time are saved in the commission ledger.
+
 = How do Overview date ranges work? =
 
 Date ranges use the WordPress site's time zone:
@@ -177,11 +200,11 @@ The latest affiliate and withdrawal lists always show the newest records overall
 
 These figures summarize the current ledger within the selected range. They are not snapshots of the balance as it stood on a past date.
 
-= What do the clicks and Converted bars mean? =
+= What does the clicks and Converted donut mean? =
 
-Total clicks are the 100% baseline. Converted counts referred orders currently marked Completed, including orders whose commissions are still on hold.
+Total clicks are the 100% baseline. The green donut segment shows completed referred orders relative to tracked clicks; the yellow ring provides the click baseline. Converted counts referred orders currently marked Completed, including orders whose commissions are still on hold. Exact totals appear below the donut, and its center shows the conversion percentage.
 
-The converted percentage is completed referred orders divided by tracked clicks. Repeat purchases can make this percentage exceed 100%; the visual bar itself stops at 100% width.
+The converted percentage is completed referred orders divided by tracked clicks. Repeat purchases can make this percentage exceed 100%; the visual ring itself stops at 100%, while the center retains the actual percentage. With no tracked clicks, a positive converted count has no calculable percentage and is shown with a dash and a neutral ring.
 
 Approved affiliates see their own lifetime activity. They cannot view another affiliate's records.
 
@@ -245,6 +268,8 @@ The free plugin does not contact WP Methods for license verification or updates,
 Notifications use WordPress wp_mail and your site's configured email service. Refmora does not bundle a separate SMTP service.
 
 Social sharing links open Facebook, WhatsApp, Telegram, X, or LinkedIn only when a visitor clicks them. The chosen platform then processes that visit under its own terms. No social SDKs are included.
+
+Every Refmora admin sidebar includes Other Products and Support & Connect directly below the sidebar note, with optional links to WP Methods products, WordPress.org, YouTube and Buy Me a Coffee. These links open external pages only when clicked. Product thumbnails are bundled locally; the resource cards do not request remote assets or collect analytics.
 
 The separately installed Pro add-on documents its own WP Methods, Stripe, and PayPal communications and credentials.
 
@@ -310,12 +335,20 @@ Available hooks include:
 * refm_exchange_settings
 * refm_export_data_request
 * refm_export_data_panel
+* refm_database_backup_panel (separate Pro add-on panel, immediately after Export Data)
 * refm_admin_overview_chart — receives the validated range and currency.
 * refm_affiliate_activity_chart — receives the signed-in affiliate ID. Add-ons must enforce record ownership and access permissions.
 
 Premium code belongs in the separate add-on plugin, not in a hidden directory inside the free package.
 
 == Changelog ==
+= 1.1.2
+* Added Clear All Trash for commissions and withdrawals, with confirmed, bounded deletion and progress feedback across all pages.
+* Added permanent deletion from financial Trash and redesigned Records/Trash view tabs with unfiltered item counts.
+* Added permanent per-affiliate removal with typed confirmation, attribution revocation, and reversible Trash/Restore for commissions and withdrawals.
+* Added optional manual commission confirmation and rejection from the Commissions list, with protected actions and persistent review history.
+* Added configurable WooCommerce order statuses for pending commission tracking, including registered custom statuses.
+
 = 1.1.1 =
 * Added affiliate link with click count section.
 * Added Payout methods icons support.
